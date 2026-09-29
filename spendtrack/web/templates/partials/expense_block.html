@@ -3,7 +3,7 @@
 {% set target = 'hx-target="#exp-' ~ eid ~ '" hx-swap="outerHTML"' %}
 <tbody id="exp-{{ eid }}" class="exp{% if expense.informational %} info{% endif %}">
 {% if mode == 'deleted' or expense.deleted_at %}
-  <tr class="row-deleted"><td colspan="7">
+  <tr class="row-deleted" hx-get="/expenses/{{ eid }}/gone" hx-trigger="load delay:10s" hx-target="#exp-{{ eid }}" hx-swap="outerHTML swap:400ms"><td colspan="7">
     Șters #{{ eid }} · {{ expense.category.name }} · {{ expense.description or '' }} · {{ expense.amount_minor|money(nf) }}
     <button class="link" hx-post="/expenses/{{ eid }}/restore" {{ target|safe }}>Restaurează</button>
   </td></tr>
@@ -122,4 +122,4 @@
   {% endif %}
 {% endif %}
 </tbody>
-{% if oob %}{% include "partials/view_total.html" %}{% endif %}
+{% if oob %}{% include "partials/view_total.html" %}{% include "partials/review_badge.html" %}{% endif %}

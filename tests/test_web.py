@@ -327,3 +327,56 @@ def test_overview_without_rates_says_so(client: TestClient) -> None:
     page = client.get("/")
     assert page.status_code == 200
     assert "încă fără curs BNR" in page.text
+
+
+def test_rating_refreshes_the_tab_badge(client: TestClient) -> None:
+    category_id = _groceries_id(client)
+    with _db(client) as db:
+        first = expenses_core.create_expense(
+            db, occurred_on=date(2026, 9, 29), amount_minor=1000, category_id=category_id
+        )
+        expenses_core.create_expense(
+            db, occurred_on=date(2026, 9, 29), amount_minor=2000, category_id=category_id
+        )
+        db.commit()
+        first_id = first.id
+    import re
+
+    page = client.get("/review")
+    assert re.search(r'id="review-badge"\s*>\s*<span class="badge">2</span>', page.text)
+    card = client.post(
+        f"/review/{first_id}/rate",
+        data={"level": "2", "index": "0"},
+        headers={"HX-Request": "true"},
+    )
+    assert re.search(
+        r'id="review-badge" hx-swap-oob="true"\s*>\s*<span class="badge">1<', card.text
+    )
+    block = client.post(
+        f"/expenses/{first_id + 1}/edit",
+        data={
+            "occurred_on": "2026-09-29",
+            "amount": "20",
+            "category_id": str(category_id),
+            "necessity": "1",
+        },
+        headers={"HX-Request": "true"},
+    )
+    assert re.search(r'id="review-badge" hx-swap-oob="true"\s*>\s*</span>', block.text)
+
+
+def test_deleted_row_vanishes_after_a_delay_unless_restored(client: TestClient) -> None:
+    with _db(client) as db:
+        expense = expenses_core.create_expense(
+            db, occurred_on=date(2026, 9, 29), amount_minor=2300, category_id=_groceries_id(client)
+        )
+        db.commit()
+        expense_id = expense.id
+    deleted = client.post(f"/expenses/{expense_id}/delete")
+    assert 'hx-trigger="load delay:10s"' in deleted.text
+    assert f'hx-get="/expenses/{expense_id}/gone"' in deleted.text
+    gone = client.get(f"/expenses/{expense_id}/gone")
+    assert gone.status_code == 200 and gone.text == ""
+    client.post(f"/expenses/{expense_id}/restore")
+    back = client.get(f"/expenses/{expense_id}/gone")
+    assert f'id="exp-{expense_id}"' in back.text and "Șters #" not in back.text

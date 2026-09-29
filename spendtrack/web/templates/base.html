@@ -12,10 +12,10 @@
 <header class="topbar">
   <a class="brand" href="/">Spendtrack</a>
   <nav>
+    <a href="/add" class="nav-add {{ 'active' if path.startswith('/add') }}" title="Adaugă" aria-label="Adaugă">+</a>
     <a href="/" class="{{ 'active' if path == '/' }}">Panou</a>
-    <a href="/add" class="{{ 'active' if path.startswith('/add') }}">Adaugă</a>
     <a href="/expenses" class="{{ 'active' if path.startswith('/expenses') }}">Cheltuieli</a>
-    <a href="/review" class="{{ 'active' if path.startswith('/review') }}">Evaluare{% if unrated %} <span class="badge">{{ unrated }}</span>{% endif %}</a>
+    <a href="/review" class="{{ 'active' if path.startswith('/review') }}">Evaluare{% with oob=false %}{% include "partials/review_badge.html" %}{% endwith %}</a>
     <a href="/reports" class="{{ 'active' if path.startswith('/reports') }}">Rapoarte</a>
     <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Setări</a>
   </nav>

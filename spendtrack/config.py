@@ -84,7 +84,7 @@ def load_config(env_file: str | os.PathLike[str] | None = ".env") -> Config:
 
     data_dir = Path(os.environ.get("DATA_DIR", "~/spendtrack-data")).expanduser()
     web_host = os.environ.get("WEB_HOST", "127.0.0.1").strip()
-    port_text = os.environ.get("WEB_PORT", "8000").strip()
+    port_text = os.environ.get("WEB_PORT", "27431").strip()
     timezone = os.environ.get("TIMEZONE", "Europe/Bucharest").strip()
     allow_remote = _as_bool(os.environ.get("ALLOW_REMOTE"))
     user = os.environ.get("BASIC_AUTH_USER") or None

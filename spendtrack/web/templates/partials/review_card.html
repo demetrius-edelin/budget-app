@@ -51,3 +51,4 @@
   <p class="muted">Toate cheltuielile au un nivel de necesitate. <a href="/add">Adaugă o cheltuială</a> sau deschide <a href="/reports">rapoartele</a>.</p>
 </article>
 {% endif %}
+{% if is_htmx %}{% with oob=true %}{% include "partials/review_badge.html" %}{% endwith %}{% endif %}

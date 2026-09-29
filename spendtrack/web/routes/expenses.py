@@ -293,6 +293,16 @@ async def expense_delete(request: Request, expense_id: int, db: Session = DbDep)
     return _block(request, db, _block_context(db, expense_id, params, mode="deleted"))
 
 
+@router.get("/expenses/{expense_id}/gone")
+async def expense_gone(request: Request, expense_id: int, db: Session = DbDep) -> Response:
+    """Remove a deleted row from the page. A restored expense shows its row again."""
+    expense = core.get_expense(db, expense_id, include_deleted=True)
+    if expense.deleted_at is not None:
+        return Response("", media_type="text/html")
+    params = await forms.all_params(request)
+    return _block(request, db, _block_context(db, expense_id, params))
+
+
 @router.post("/expenses/{expense_id}/restore")
 async def expense_restore(request: Request, expense_id: int, db: Session = DbDep) -> Response:
     params = await forms.all_params(request)

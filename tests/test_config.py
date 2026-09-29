@@ -29,7 +29,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_defaults_are_loopback() -> None:
     config = load_config(env_file=None)
     assert config.web_host == "127.0.0.1"
-    assert config.web_port == 8000
+    assert config.web_port == 27431
     assert config.timezone == "Europe/Bucharest"
     assert config.db_path.name == "spendtrack.db"
 

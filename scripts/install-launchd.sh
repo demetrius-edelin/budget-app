@@ -26,6 +26,9 @@ DATA_DIR="${DATA_DIR:-$HOME/spendtrack-data}"
 DATA_DIR="${DATA_DIR/#\~/$HOME}"
 mkdir -p "$DATA_DIR/logs" "$HOME/Library/LaunchAgents"
 
+WEB_PORT="$(grep -E '^WEB_PORT=' "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- || true)"
+WEB_PORT="${WEB_PORT:-27431}"
+
 sed -e "s|__PYTHON__|$PYTHON|g" \
     -e "s|__PROJECT_DIR__|$PROJECT_DIR|g" \
     -e "s|__DATA_DIR__|$DATA_DIR|g" \
@@ -34,4 +37,4 @@ sed -e "s|__PYTHON__|$PYTHON|g" \
 launchctl bootout "$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 echo "Installed $PLIST. Spendtrack now starts at login."
-echo "Open http://127.0.0.1:8000 in the browser."
+echo "Open http://127.0.0.1:$WEB_PORT in the browser."

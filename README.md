@@ -32,7 +32,7 @@ The specification is in `Spending Tracker — MVP Specification.md`.
    uv run python -m spendtrack
    ```
 
-   The app creates the database, writes the daily backup and opens the browser at http://127.0.0.1:8000.
+   The app creates the database, writes the daily backup and opens the browser at http://127.0.0.1:27431.
 
 4. Open **Settings**. Add the fuel price and the consumption with an effective date. The drive form needs both values.
 
@@ -75,7 +75,14 @@ Run the install script once from the project folder:
 scripts/install-launchd.sh
 ```
 
-The script writes `~/Library/LaunchAgents/com.spendtrack.plist` and loads it. The app then starts at login without a browser window. Open http://127.0.0.1:8000 when you need it.
+The script writes `~/Library/LaunchAgents/com.spendtrack.plist` and loads it. The app then starts at login without a browser window. Open http://127.0.0.1:27431 when you need it.
+
+The agent runs the code from the project folder with the project's `.venv`. It does not reload changed files while it runs. After a code update, restart the agent:
+
+```
+uv sync
+launchctl kickstart -k gui/$(id -u)/com.spendtrack
+```
 
 To remove the agent:
 
@@ -102,7 +109,7 @@ The `.env` file holds the machine settings:
 | --- | --- | --- |
 | `DATA_DIR` | `~/spendtrack-data` | The folder for the database, backups and logs |
 | `WEB_HOST` | `127.0.0.1` | The address the app listens on |
-| `WEB_PORT` | `8000` | The port |
+| `WEB_PORT` | `27431` | The port |
 | `TIMEZONE` | `Europe/Bucharest` | The time zone for dates and periods |
 | `TELEGRAM_BOT_TOKEN` | empty | The bot token. Empty runs the app without the bot |
 | `ALLOWED_TELEGRAM_USER_IDS` | empty | Your Telegram user id, or several separated by commas |
