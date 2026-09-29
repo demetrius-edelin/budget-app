@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, sessionmaker
@@ -208,6 +208,10 @@ def create_app(
     app.state.fx_fetch = fx.fetch_rates_xml
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
     app.middleware("http")(_basic_auth_middleware)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _favicon() -> FileResponse:
+        return FileResponse(WEB_DIR / "static" / "favicon.ico")
 
     @app.exception_handler(NotFoundError)
     async def _not_found(request: Request, exc: NotFoundError) -> Response:

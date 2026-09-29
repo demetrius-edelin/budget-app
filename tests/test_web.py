@@ -380,3 +380,12 @@ def test_deleted_row_vanishes_after_a_delay_unless_restored(client: TestClient) 
     client.post(f"/expenses/{expense_id}/restore")
     back = client.get(f"/expenses/{expense_id}/gone")
     assert f'id="exp-{expense_id}"' in back.text and "Șters #" not in back.text
+
+
+def test_favicon_files_are_served(client: TestClient) -> None:
+    ico = client.get("/favicon.ico")
+    assert ico.status_code == 200 and ico.headers["content-type"].startswith("image/")
+    svg = client.get("/static/favicon.svg")
+    assert svg.status_code == 200 and "\U0001f4b0" in svg.text
+    page = client.get("/")
+    assert 'rel="icon" href="/static/favicon.svg"' in page.text
