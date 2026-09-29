@@ -143,3 +143,4 @@ table.calendar td.future .day { color: #b8bec8; }
 table.calendar td.today { box-shadow: inset 0 0 0 2px var(--accent); }
 table.calendar td.today .day { color: var(--accent); font-weight: 700; }
 .eur { margin: -2px 0 8px; }
+.small { font-size: 0.85rem; font-weight: 400; display: block; }

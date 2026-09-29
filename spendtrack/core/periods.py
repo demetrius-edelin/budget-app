@@ -31,8 +31,8 @@ def short_date(day: date) -> str:
 
 
 def month_short(day: date) -> str:
-    """Return the month and the two-digit year, for example 'sep 26'."""
-    return f"{MONTHS[day.month - 1]} {day.year % 100:02d}"
+    """Return the month and the full year, for example 'sep 2026'."""
+    return f"{MONTHS[day.month - 1]} {day.year}"
 
 
 @dataclass(frozen=True)

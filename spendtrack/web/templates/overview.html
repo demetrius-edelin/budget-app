@@ -14,7 +14,7 @@
     <p>{{ change(r.change_pct) }} față de aceeași perioadă din {{ previous }}
       {% if r.previous_total_minor %}<span class="muted">({{ r.previous_total_minor|money(nf) }})</span>{% endif %}</p>
     {% if r.period.kind == 'week' %}<p>{{ change(r.change_vs_four_week_pct) }} față de media pe 4 săptămâni</p>{% endif %}
-    <p class="muted">{{ r.to_date.start|short_date }}{% if r.to_date.days > 1 %} – {{ r.to_date.end|short_date }}{% endif %} · {{ r.expense_count }} cheltuieli · {{ r.daily_average_minor|money(nf) }} pe zi</p>
+    <p class="muted">{{ r.to_date.start|short_date }}{% if r.to_date.days > 1 %} – {{ r.to_date.end|short_date }}{% endif %} · {{ r.expense_count }} cheltuieli · {{ r.daily_average_minor|money(nf) }} pe zi ({{ r.to_date.days }} {{ 'zi' if r.to_date.days == 1 else 'zile' }})</p>
   </article>
   {% endfor %}
 </section>
@@ -78,9 +78,9 @@
   <article class="card">
     <h2>Unde poți reduce, luna aceasta</h2>
     <dl class="facts">
-      <dt>Discreționar</dt><dd>{{ view.month.discretionary_minor|money(nf) }} {% if view.month.discretionary_share_pct is not none %}<span class="muted">({{ view.month.discretionary_share_pct }}%)</span>{% endif %}</dd>
-      <dt>Marcate ca înlocuibile</dt><dd>{{ view.month.flagged_minor|money(nf) }} <span class="muted">pe {{ view.month.flagged_count }} linii</span></dd>
-      <dt>Economie posibilă</dt><dd class="strong">{{ view.month.potential_saving_minor|money(nf) }} {{ currency }}</dd>
+      <dt>Opțional (Util + Impuls)</dt><dd>{{ view.month.discretionary_minor|money(nf) }} {% if view.month.discretionary_share_pct is not none %}<span class="muted">({{ view.month.discretionary_share_pct }}%)</span>{% endif %}</dd>
+      <dt>Economie radicală</dt><dd class="strong">{{ view.month.radical_saving_minor|money(nf) }} {{ currency }} <span class="muted small">Important + Util + Impuls</span></dd>
+      <dt>Economie posibilă</dt><dd class="strong">{{ view.month.potential_saving_minor|money(nf) }} {{ currency }} <span class="muted small">Impuls {{ view.month.impulse_minor|money(nf) }} + alternative mai ieftine {{ view.month.cheaper_saving_minor|money(nf) }}</span></dd>
       <dt>Recurente</dt><dd>{{ view.month.recurring_minor|money(nf) }}</dd>
     </dl>
     <p><a href="/reports?kind=month">Deschide raportul lunar</a></p>

@@ -16,12 +16,14 @@ from spendtrack.db.models import Category, Expense, ExpenseItem, utcnow
 NECESSITY_NAMES: dict[int, str] = {
     1: "Esențial",
     2: "Important",
-    3: "Plăcere",
+    3: "Util",
     4: "Impuls",
 }
 UNRATED_NAME = "Neevaluat"
 UNSPECIFIED_NAME = "Nespecificat"
 DISCRETIONARY_LEVELS = (3, 4)
+RADICAL_LEVELS = (2, 3, 4)
+IMPULSE = 4
 SOURCES = ("web", "metric", "telegram")
 
 

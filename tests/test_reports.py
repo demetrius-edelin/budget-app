@@ -53,7 +53,7 @@ def test_breakdown_example_from_the_specification(session: Session, category) ->
     assert report.total_minor == 10000
     by_level = {bucket.name: bucket.amount_minor for bucket in report.by_necessity}
     assert by_level["Esențial"] == 5000
-    assert by_level["Plăcere"] == 5000
+    assert by_level["Util"] == 5000
     assert report.discretionary_minor == 5000
     assert report.discretionary_share_pct == 50.0
 
@@ -62,10 +62,14 @@ def test_flagged_and_savings(session: Session, category) -> None:
     _add(session, category, TODAY, 1850, "Mâncare în oraș", necessity=4, cheaper_alt_minor=800)
     _add(session, category, TODAY, 3000, "Cumpărături", cheaper_alt=True)
     _add(session, category, TODAY, 500, "Alimente", cheaper_alt_minor=900)
+    _add(session, category, TODAY, 3000, "Cumpărături", necessity=3, cheaper_alt_minor=2000)
     report = reports.period_report(session, "day", TODAY, TODAY)
-    assert report.flagged_count == 3
-    assert report.flagged_minor == 5350
-    assert report.potential_saving_minor == 1050
+    assert report.flagged_count == 4
+    assert report.flagged_minor == 8350
+    # The Impulse coffee counts in full (18.50), the Util purchase its difference (10.00).
+    assert (report.impulse_minor, report.cheaper_saving_minor) == (1850, 1000)
+    assert report.potential_saving_minor == 2850
+    assert report.radical_saving_minor == 1850 + 3000  # Impulse coffee + Util purchase
     flagged = reports.flagged_lines(report.lines)
     assert flagged[0].potential_saving_minor == 1050
 

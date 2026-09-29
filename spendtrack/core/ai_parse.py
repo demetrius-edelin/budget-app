@@ -79,7 +79,7 @@ Rules:
 - category: exactly one name from the list. Use "Uncategorized" when none fits.
 - description: a short label in Romanian, without the amount or the date, first letter uppercase. For a drive, null or the place, for example "Cluj".
 - items: partial detail such as "groceries 210, of which wine 50" or "din care vin 50" gives items [Wine 50]. Never add items that are not in the message. The items never exceed the total.
-- necessity: only when the owner states it: essential/necessary/"necesar" = 1, important = 2, nice/"placere" = 3, impulse/regret/"impuls" = 4, or "!1" to "!4". Otherwise null.
+- necessity: only when the owner states it: essential/necessary/"necesar" = 1, important = 2, useful/nice/"util" = 3, impulse/regret/"impuls" = 4, or "!1" to "!4". Otherwise null.
 - cheaper_alt: true when the owner says a cheaper option exists. cheaper_alt_amount when a price is given. cheaper_alt_note: the short reason.
 - recurring: true only when the owner says it repeats: subscription, "abonament", monthly, "lunar".
 - drive: quantity_km as a decimal string. consumption_override (L/100 km) and fuel_price_override (RON per litre) only when the owner gives them.

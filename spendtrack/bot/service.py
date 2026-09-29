@@ -458,9 +458,12 @@ class BotService:
         lines = [
             f"{label}: {self._money(db, report.total_minor)} RON"
             f" ({change} față de aceeași perioadă anterioară)",
-            f"Discreționar: {self._money(db, report.discretionary_minor)}{share}",
+            f"Opțional (Util + Impuls): {self._money(db, report.discretionary_minor)}{share}",
             f"Economie posibilă: {self._money(db, report.potential_saving_minor)}"
-            f" pe {report.flagged_count} linii marcate",
+            f" (Impuls {self._money(db, report.impulse_minor)}"
+            f" + alternative mai ieftine {self._money(db, report.cheaper_saving_minor)})",
+            f"Economie radicală: {self._money(db, report.radical_saving_minor)}"
+            " (Important + Util + Impuls)",
             f"Recurent: {self._money(db, report.recurring_minor)}",
         ]
         unrated = expenses_core.unrated_count(db)

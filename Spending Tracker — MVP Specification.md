@@ -158,7 +158,7 @@ Seed categories:
 | Cadouri și altele (gifts and other) | none | no |
 | Necategorisit (uncategorized) | none | no |
 
-The seed renames the English names of an earlier build to these names once. The necessity levels show as Esențial, Important, Plăcere and Impuls, the unrated bucket as Neevaluat, and the remainder line as Nespecificat.
+The seed renames the English names of an earlier build to these names once. The necessity levels show as Esențial, Important, Util and Impuls, the unrated bucket as Neevaluat, and the remainder line as Nespecificat.
 
 ### metric_type
 
@@ -203,7 +203,7 @@ Key-value pairs: `currency`, `number_format`, `monthly_target_minor`, `fuel_cost
 1. A period total is the sum of `amount_minor` over expenses that are not deleted, not informational, and dated in the period. Items never add to totals.
 2. For breakdowns, each expense becomes its items plus one remainder line, labelled "Unspecified". The remainder is the amount minus the sum of the items. The core drops a remainder of zero.
 3. The category, the necessity level and the cheaper-alternative values of a line come from the item. If the item has none, they come from the expense. The recurring flag always comes from the expense.
-4. The potential saving of a line is its amount minus `cheaper_alt_minor`, when that price is set and lower than the amount. A line flagged without a price counts toward the flagged amount but adds nothing to savings.
+4. The potential saving of a line is its amount minus `cheaper_alt_minor`, when that price is set and lower than the amount. A line flagged without a price counts toward the flagged amount but adds nothing to savings. An Impulse line counts its full amount as the potential saving instead, because on reflection the owner does not want it.
 5. The core rejects items whose sum exceeds the expense amount. The owner changes the total first.
 6. The core rejects an expense amount below the sum of its items.
 
@@ -244,7 +244,7 @@ Every expense and item can carry a necessity level and a cheaper-alternative fla
 | --- | --- | --- | --- |
 | 1 | Essential | Necessary, and not reducible in the short term | Rent, utilities, medicine, basic groceries |
 | 2 | Important | Necessary, but the amount or the frequency can shrink | Commute, phone plan, work lunches |
-| 3 | Nice-to-have | Adds comfort. The owner can skip it without real harm | Eating out, wine, streaming |
+| 3 | Nice-to-have, shown as Util | Adds comfort. The owner can skip it without real harm | Eating out, wine, streaming |
 | 4 | Impulse | Unplanned. On reflection, the owner does not want it again | Checkout snacks, sale purchases |
 
 Unrated (null) is its own bucket in every report and feeds the review queue.
@@ -326,11 +326,12 @@ Periods: a day is a calendar day, a week runs Monday to Sunday, and a month is a
 | Total | The sum of expense amounts in the period |
 | Change | Against the same elapsed span of the previous period of the same kind. For weeks, also against the average of the same span in the previous 4 weeks |
 | By necessity | Breakdown lines grouped by level, with Unrated |
-| Discretionary | Nice-to-have plus Impulse, as an amount and as a share of the total |
-| Flagged | The amount of lines with a cheaper alternative, and the sum of their potential savings |
+| Discretionary, shown as Opțional (Util + Impuls) | Nice-to-have plus Impulse, as an amount and as a share of the total |
+| Radical saving, shown as Economie radicală | Important plus Nice-to-have plus Impulse, the full amounts |
+| Potential saving | The full amount of every Impulse line, plus the amount minus the cheaper price of every other line with a cheaper price set and lower. Shown with its two parts |
 | Recurring | The sum of recurring lines |
 | By category | Breakdown lines grouped by category |
-| Daily average | The total divided by the days elapsed in the period |
+| Daily average | The total divided by the days elapsed in the period, shown with the day count |
 
 Comparison example: on Tuesday 29 Sep, the week figure compares Monday 28 to Tuesday 29 against Monday 21 to Tuesday 22. For a complete past period, the comparison uses the whole previous period.
 

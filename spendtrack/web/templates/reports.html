@@ -23,10 +23,10 @@
     <div><span class="label">Total</span><span class="big">{{ report.total_minor|money(nf) }} {{ currency }}</span></div>
     <div><span class="label">Variație față de {{ report.previous_span.start|short_date }}{% if report.previous_span.days > 1 %} – {{ report.previous_span.end|short_date }}{% endif %}</span><span>{{ change(report.change_pct) }} <span class="muted">({{ report.previous_total_minor|money(nf) }})</span></span></div>
     {% if kind == 'week' %}<div><span class="label">Variație față de media pe 4 săptămâni</span><span>{{ change(report.change_vs_four_week_pct) }} <span class="muted">({{ report.four_week_avg_minor|money(nf) }})</span></span></div>{% endif %}
-    <div><span class="label">Media zilnică</span><span>{{ report.daily_average_minor|money(nf) }}</span></div>
-    <div><span class="label">Discreționar</span><span>{{ report.discretionary_minor|money(nf) }}{% if report.discretionary_share_pct is not none %} <span class="muted">({{ report.discretionary_share_pct }}%)</span>{% endif %}</span></div>
-    <div><span class="label">Marcate</span><span>{{ report.flagged_minor|money(nf) }} <span class="muted">pe {{ report.flagged_count }} linii</span></span></div>
-    <div><span class="label">Economie posibilă</span><span class="strong">{{ report.potential_saving_minor|money(nf) }}</span></div>
+    <div><span class="label">Media pe zi ({{ report.to_date.days }} {{ 'zi' if report.to_date.days == 1 else 'zile' }})</span><span>{{ report.daily_average_minor|money(nf) }}</span></div>
+    <div><span class="label">Opțional (Util + Impuls)</span><span>{{ report.discretionary_minor|money(nf) }}{% if report.discretionary_share_pct is not none %} <span class="muted">({{ report.discretionary_share_pct }}%)</span>{% endif %}</span></div>
+    <div><span class="label">Economie radicală</span><span class="strong">{{ report.radical_saving_minor|money(nf) }}</span><span class="muted small">Important + Util + Impuls</span></div>
+    <div><span class="label">Economie posibilă</span><span class="strong">{{ report.potential_saving_minor|money(nf) }}</span><span class="muted small">Impuls {{ report.impulse_minor|money(nf) }} + alternative mai ieftine {{ report.cheaper_saving_minor|money(nf) }}</span></div>
     <div><span class="label">Recurente</span><span>{{ report.recurring_minor|money(nf) }}</span></div>
   </div>
 </section>

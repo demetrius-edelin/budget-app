@@ -261,7 +261,8 @@ def test_commands(bot) -> None:
     assert service.process_update(update("/help", update_id=2)).startswith("Trimite o cheltuială")
     today = service.process_update(update("/today", update_id=3))
     assert today.startswith("Azi: 18,50 RON")
-    assert "Economie posibilă: 10,50 pe 1 linii marcate" in today
+    assert "Economie posibilă: 18,50 (Impuls 18,50 + alternative mai ieftine 0,00)" in today
+    assert "Economie radicală: 18,50 (Important + Util + Impuls)" in today
     assert "#1 mar 29 sep · Mâncare în oraș · Coffee · 18,50" in service.process_update(
         update("/last 3", update_id=4)
     )

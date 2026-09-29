@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session, selectinload
 from spendtrack.core import settings as settings_core
 from spendtrack.core.expenses import (
     DISCRETIONARY_LEVELS,
+    IMPULSE,
     NECESSITY_NAMES,
+    RADICAL_LEVELS,
     Line,
     expense_lines,
     necessity_name,
@@ -46,6 +48,9 @@ class PeriodReport:
     flagged_minor: int
     flagged_count: int
     potential_saving_minor: int
+    impulse_minor: int
+    cheaper_saving_minor: int
+    radical_saving_minor: int
     recurring_minor: int
     by_category: list[Bucket]
     daily_average_minor: int
@@ -117,6 +122,17 @@ def flagged_lines(lines: list[Line]) -> list[Line]:
     return flagged
 
 
+def potential_saving(lines: list[Line]) -> tuple[int, int]:
+    """Return (impulse amount, cheaper-alternative saving on the other lines).
+
+    An Impulse line counts in full: on reflection the owner does not want it.
+    Every other line counts its amount minus the cheaper price, when set and lower.
+    """
+    impulse = sum(line.amount_minor for line in lines if line.necessity == IMPULSE)
+    cheaper = sum(line.potential_saving_minor for line in lines if line.necessity != IMPULSE)
+    return impulse, cheaper
+
+
 def recurring_lines(lines: list[Line]) -> list[Line]:
     recurring = [line for line in lines if line.recurring]
     recurring.sort(key=lambda line: (-line.amount_minor, line.description))
@@ -150,6 +166,8 @@ def period_report(session: Session, kind: str, anchor: date, today: date) -> Per
     discretionary = sum(b.amount_minor for b in by_necessity if b.key in DISCRETIONARY_LEVELS)
     flagged = flagged_lines(lines)
     recurring = recurring_lines(lines)
+    impulse, cheaper_saving = potential_saving(lines)
+    radical = sum(b.amount_minor for b in by_necessity if b.key in RADICAL_LEVELS)
     return PeriodReport(
         period=period,
         to_date=current,
@@ -164,7 +182,10 @@ def period_report(session: Session, kind: str, anchor: date, today: date) -> Per
         discretionary_share_pct=round(discretionary / total * 100, 1) if total else None,
         flagged_minor=sum(line.amount_minor for line in flagged),
         flagged_count=len(flagged),
-        potential_saving_minor=sum(line.potential_saving_minor for line in flagged),
+        potential_saving_minor=impulse + cheaper_saving,
+        impulse_minor=impulse,
+        cheaper_saving_minor=cheaper_saving,
+        radical_saving_minor=radical,
         recurring_minor=sum(line.amount_minor for line in recurring),
         by_category=category_buckets(lines),
         daily_average_minor=round(total / current.days) if current.days else 0,

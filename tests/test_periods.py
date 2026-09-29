@@ -1,6 +1,7 @@
 from datetime import date
 
 from spendtrack.core.periods import (
+    month_short,
     period_for,
     period_label,
     previous_period,
@@ -46,3 +47,8 @@ def test_labels() -> None:
     assert period_label(period_for("week", date(2026, 9, 21))) == "Săptămâna 21–27 sep 2026"
     assert period_label(period_for("day", TODAY)) == "mar 29 sep 2026"
     assert period_label(period_for("month", TODAY)) == "septembrie 2026"
+
+
+def test_month_short_spells_the_year() -> None:
+    assert month_short(date(2025, 10, 1)) == "oct 2025"
+    assert month_short(TODAY) == "sep 2026"
