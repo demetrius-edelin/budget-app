@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Review · Spendtrack{% endblock %}
+{% block content %}
+<h1>Review</h1>
+<p class="muted">Keys: <kbd>1</kbd>–<kbd>4</kbd> set the level · <kbd>c</kbd> cheaper · <kbd>r</kbd> recurring · <kbd>s</kbd> skip · <kbd>←</kbd> <kbd>→</kbd> move</p>
+<div id="review-card">
+{% include "partials/review_card.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "_macros.html" import change %}
+{% block title %}Reports · Spendtrack{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+
+<form method="get" action="/reports" class="filters">
+  <div class="seg">
+    {% for k, label in [('day', 'Day'), ('week', 'Week'), ('month', 'Month')] %}
+    <a class="seg-btn {{ 'on' if kind == k }}" href="/reports?kind={{ k }}&date={{ anchor|iso }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <a class="button" href="/reports?kind={{ kind }}&date={{ prev_date|iso }}">← Previous</a>
+  <label>Date <input type="date" name="date" value="{{ anchor|iso }}" onchange="this.form.submit()"></label>
+  {% if not is_future %}<a class="button" href="/reports?kind={{ kind }}&date={{ next_date|iso }}">Next →</a>{% endif %}
+  <a class="button" href="/reports?kind={{ kind }}">Today</a>
+</form>
+
+<section class="card">
+  <h2>{{ report.period|period_label }}{% if report.to_date.end < report.period.end %} <span class="muted">to date ({{ report.to_date.end|short_date }})</span>{% endif %}</h2>
+  <div class="facts-grid">
+    <div><span class="label">Total</span><span class="big">{{ report.total_minor|money(nf) }} {{ currency }}</span></div>
+    <div><span class="label">Change vs {{ report.previous_span.start|short_date }}{% if report.previous_span.days > 1 %} – {{ report.previous_span.end|short_date }}{% endif %}</span><span>{{ change(report.change_pct) }} <span class="muted">({{ report.previous_total_minor|money(nf) }})</span></span></div>
+    {% if kind == 'week' %}<div><span class="label">Change vs 4-week average</span><span>{{ change(report.change_vs_four_week_pct) }} <span class="muted">({{ report.four_week_avg_minor|money(nf) }})</span></span></div>{% endif %}
+    <div><span class="label">Daily average</span><span>{{ report.daily_average_minor|money(nf) }}</span></div>
+    <div><span class="label">Discretionary</span><span>{{ report.discretionary_minor|money(nf) }}{% if report.discretionary_share_pct is not none %} <span class="muted">({{ report.discretionary_share_pct }}%)</span>{% endif %}</span></div>
+    <div><span class="label">Flagged</span><span>{{ report.flagged_minor|money(nf) }} <span class="muted">on {{ report.flagged_count }} lines</span></span></div>
+    <div><span class="label">Potential saving</span><span class="strong">{{ report.potential_saving_minor|money(nf) }}</span></div>
+    <div><span class="label">Recurring</span><span>{{ report.recurring_minor|money(nf) }}</span></div>
+  </div>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>By necessity</h2>
+    <table class="compact">
+      {% for b in report.by_necessity %}
+      <tr><td><span class="dot l{{ b.key if b.key else 'u' }}"></span> {{ b.name }}</td><td class="num">{{ b.amount_minor|money(nf) }}</td><td class="num muted">{% if report.total_minor %}{{ (b.amount_minor * 100 / report.total_minor)|round(0)|int }}%{% endif %}</td><td class="num muted">{{ b.count }} lines</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  <section class="card">
+    <h2>By category</h2>
+    {% if report.by_category %}
+    <table class="compact">
+      {% for b in report.by_category %}
+      <tr><td>{{ b.name }}</td><td class="num">{{ b.amount_minor|money(nf) }}</td><td class="num muted">{{ (b.amount_minor * 100 / report.total_minor)|round(0)|int }}%</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">Nothing in this period.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Flagged lines, largest saving first</h2>
+    {% if flagged %}
+    <table class="compact">
+      <thead><tr><th>Line</th><th class="num">Amount</th><th class="num">Cheaper</th><th class="num">Saving</th></tr></thead>
+      {% for line in flagged %}
+      <tr><td>{{ line.occurred_on|short_date }} · {{ line.description }} <span class="muted">{{ line.category_name }}{% if line.cheaper_alt_note %} · {{ line.cheaper_alt_note }}{% endif %}</span></td><td class="num">{{ line.amount_minor|money(nf) }}</td><td class="num">{{ line.cheaper_alt_minor|money(nf) if line.cheaper_alt_minor is not none else '–' }}</td><td class="num">{{ line.potential_saving_minor|money(nf) }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">No line is flagged in this period.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Recurring</h2>
+    {% if recurring %}
+    <table class="compact">
+      {% for line in recurring %}
+      <tr><td>{{ line.occurred_on|short_date }} · {{ line.description }} <span class="muted">{{ line.category_name }}</span></td><td class="num">{{ line.amount_minor|money(nf) }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">No recurring line in this period.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>12-month trend by necessity</h2>
+  <canvas id="trend-chart" height="110"></canvas>
+  <script type="application/json" id="trend-data">{{ chart_json|safe }}</script>
+</section>
+
+<section class="card">
+  <h2>Category by month</h2>
+  <div class="scroll">
+  <table class="compact matrix">
+    <thead><tr><th>Category</th>{% for m in table.months %}<th class="num">{{ m.start.strftime('%b %y') }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+    <tbody>
+    {% for row in table.rows %}
+    <tr><td>{{ row.name }}</td>{% for a in row.amounts %}<td class="num {{ 'muted' if not a }}">{{ a|money(nf) if a else '·' }}</td>{% endfor %}<td class="num strong">{{ row.total_minor|money(nf) }}</td></tr>
+    {% endfor %}
+    <tr class="total"><td>Total</td>{% for a in table.totals %}<td class="num">{{ a|money(nf) }}</td>{% endfor %}<td class="num">{{ table.totals|sum|money(nf) }}</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+<script src="/static/chart.umd.js"></script>
+{% endblock %}

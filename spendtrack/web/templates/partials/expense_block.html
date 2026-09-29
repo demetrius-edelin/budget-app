@@ -1,0 +1,124 @@
+{% from "_macros.html" import necessity_buttons, category_select %}
+{% set eid = expense.id %}
+{% set target = 'hx-target="#exp-' ~ eid ~ '" hx-swap="outerHTML"' %}
+<tbody id="exp-{{ eid }}" class="exp{% if expense.informational %} info{% endif %}">
+{% if mode == 'deleted' or expense.deleted_at %}
+  <tr class="row-deleted"><td colspan="7">
+    Deleted #{{ eid }} · {{ expense.category.name }} · {{ expense.description or '' }} · {{ expense.amount_minor|money(nf) }}
+    <button class="link" hx-post="/expenses/{{ eid }}/restore" {{ target|safe }}>Restore</button>
+  </td></tr>
+{% elif mode == 'edit' %}
+  <tr class="row-edit"><td colspan="7">
+    <form hx-post="/expenses/{{ eid }}/edit" {{ target|safe }} class="inline-form" autocomplete="off">
+      <input type="hidden" name="expanded" value="{{ '1' if expanded else '0' }}">
+      <div class="row">
+        <label>Date <input type="date" name="occurred_on" value="{{ expense.occurred_on|iso }}" required></label>
+        <label>Amount {% if expense.source == 'metric' %}<input type="text" value="{{ expense.amount_minor|money(nf) }}" disabled title="The amount of a drive entry is read-only.">{% else %}<input type="text" name="amount" inputmode="decimal" value="{{ expense.amount_minor|money('en-US')|replace(',', '') }}" required>{% endif %}</label>
+        <label>Category {{ category_select('category_id', expense.category_id, categories) }}</label>
+        <label class="grow">Description <input type="text" name="description" value="{{ expense.description or '' }}"></label>
+      </div>
+      {{ necessity_buttons('necessity', expense.necessity) }}
+      <div class="row">
+        <label class="check"><input type="checkbox" name="cheaper_alt" value="1" {% if expense.cheaper_alt %}checked{% endif %}> Cheaper alternative</label>
+        <label>Cheaper price <input type="text" name="cheaper_alt_amount" inputmode="decimal" value="{{ expense.cheaper_alt_minor|money('en-US')|replace(',', '') if expense.cheaper_alt_minor is not none else '' }}"></label>
+        <label>Note <input type="text" name="cheaper_alt_note" value="{{ expense.cheaper_alt_note or '' }}"></label>
+        <label class="check"><input type="checkbox" name="recurring" value="1" {% if expense.recurring %}checked{% endif %}> Recurring</label>
+      </div>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+      <div class="row">
+        <button class="primary">Save</button>
+        <button type="button" class="link" hx-get="/expenses/{{ eid }}/row?expanded={{ '1' if expanded else '0' }}" {{ target|safe }}>Cancel</button>
+      </div>
+    </form>
+  </td></tr>
+{% else %}
+  <tr class="row-main">
+    <td>{{ expense.occurred_on|short_date }}</td>
+    <td>{{ expense.category.name }}</td>
+    <td><span class="muted">#{{ eid }}</span> {{ expense.description or '' }}
+      {% if expense.source == 'metric' %}<span class="tag">drive</span>{% endif %}
+      {% if expense.informational %}<span class="tag muted" title="Excluded from totals: fuel cost mode is receipts">info only</span>{% endif %}
+      {% if expense.live_items %}<span class="tag">{{ expense.live_items|length }} {{ 'item' if expense.live_items|length == 1 else 'items' }}</span>{% endif %}
+    </td>
+    <td class="num">{{ expense.amount_minor|money(nf) }}</td>
+    <td><span class="dot l{{ expense.necessity if expense.necessity else 'u' }}"></span> {{ necessity_name(expense.necessity) }}</td>
+    <td>
+      {% if expense.cheaper_alt %}<span class="tag warn">cheaper{% if expense.cheaper_alt_minor is not none %} {{ expense.cheaper_alt_minor|money(nf) }}{% endif %}</span>{% endif %}
+      {% if expense.recurring %}<span class="tag">recurring</span>{% endif %}
+    </td>
+    <td class="actions">
+      <button class="link" hx-get="/expenses/{{ eid }}/row?expanded={{ '0' if expanded else '1' }}" {{ target|safe }}>{{ 'Close' if expanded else 'Items' }}</button>
+      <button class="link" hx-get="/expenses/{{ eid }}/edit" {{ target|safe }}>Edit</button>
+      <button class="link danger" hx-post="/expenses/{{ eid }}/delete" {{ target|safe }}>Delete</button>
+    </td>
+  </tr>
+  {% if expanded %}
+  <tr class="row-items"><td colspan="7">
+    {% set calc = calculation if calculation else (calculations[eid] if calculations is defined and eid in calculations else none) %}
+    {% if calc %}<p class="muted">Calculation: {{ calc }}</p>{% endif %}
+    {% if expense.cheaper_alt_note %}<p class="muted">Cheaper note: {{ expense.cheaper_alt_note }}</p>{% endif %}
+    <table class="items">
+      <thead><tr><th>Item</th><th class="num">Amount</th><th>Category</th><th>Necessity</th><th>Flags</th><th></th></tr></thead>
+      <tbody>
+      {% for item in expense.items %}
+        {% if item.deleted_at is none %}
+          {% if editing_item_id == item.id %}
+          <tr class="row-edit"><td colspan="6">
+            <form hx-post="/items/{{ item.id }}/edit" {{ target|safe }} class="inline-form" autocomplete="off">
+              <div class="row">
+                <label>Item <input type="text" name="item_description" value="{{ item.description }}" required></label>
+                <label>Amount <input type="text" name="item_amount" inputmode="decimal" value="{{ item.amount_minor|money('en-US')|replace(',', '') }}" required></label>
+                <label>Category {{ category_select('item_category_id', item.category_id, categories, empty_label='Same as expense') }}</label>
+              </div>
+              {{ necessity_buttons('item_necessity', item.necessity) }}
+              <div class="row">
+                <label class="check"><input type="checkbox" name="item_cheaper_alt" value="1" {% if item.cheaper_alt %}checked{% endif %}> Cheaper alternative</label>
+                <label>Cheaper price <input type="text" name="item_cheaper_alt_amount" inputmode="decimal" value="{{ item.cheaper_alt_minor|money('en-US')|replace(',', '') if item.cheaper_alt_minor is not none else '' }}"></label>
+                <label>Note <input type="text" name="item_cheaper_alt_note" value="{{ item.cheaper_alt_note or '' }}"></label>
+              </div>
+              {% if error %}<p class="error">{{ error }}</p>{% endif %}
+              <div class="row"><button class="primary">Save item</button> <button type="button" class="link" hx-get="/expenses/{{ eid }}/row?expanded=1" {{ target|safe }}>Cancel</button></div>
+            </form>
+          </td></tr>
+          {% else %}
+          <tr>
+            <td>{{ item.description }}</td>
+            <td class="num">{{ item.amount_minor|money(nf) }}</td>
+            <td>{{ item.category.name if item.category else expense.category.name ~ ' (inherited)' }}</td>
+            <td>{% if item.necessity is not none %}{{ necessity_name(item.necessity) }}{% else %}<span class="muted">{{ necessity_name(expense.necessity) }} (inherited)</span>{% endif %}</td>
+            <td>{% if item.cheaper_alt %}<span class="tag warn">cheaper{% if item.cheaper_alt_minor is not none %} {{ item.cheaper_alt_minor|money(nf) }}{% endif %}</span>{% endif %}</td>
+            <td class="actions">
+              <button class="link" hx-get="/items/{{ item.id }}/edit" {{ target|safe }}>Edit</button>
+              <button class="link danger" hx-post="/items/{{ item.id }}/delete" {{ target|safe }}>Delete</button>
+            </td>
+          </tr>
+          {% endif %}
+        {% else %}
+          <tr class="row-deleted"><td colspan="5"><s>{{ item.description }} · {{ item.amount_minor|money(nf) }}</s></td><td class="actions"><button class="link" hx-post="/items/{{ item.id }}/restore" {{ target|safe }}>Restore</button></td></tr>
+        {% endif %}
+      {% endfor %}
+      {% set rest = remainder_minor(expense) %}
+      {% if rest > 0 or not expense.live_items %}
+      <tr class="remainder"><td>Unspecified</td><td class="num">{{ rest|money(nf) }}</td><td>{{ expense.category.name }}</td><td>{{ necessity_name(expense.necessity) }}</td><td></td><td></td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+    {% if editing_item_id is none %}
+    <form hx-post="/expenses/{{ eid }}/items" {{ target|safe }} class="inline-form add-item" autocomplete="off">
+      <div class="row">
+        <label>New item <input type="text" name="item_description" placeholder="Wine" required></label>
+        <label>Amount <input type="text" name="item_amount" inputmode="decimal" placeholder="50" required></label>
+        <label>Category {{ category_select('item_category_id', none, categories, empty_label='Same as expense') }}</label>
+        <label>Necessity <select name="item_necessity"><option value="">Same as expense</option>{% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}">{{ name }}</option>{% endfor %}</select></label>
+        <label class="check"><input type="checkbox" name="item_cheaper_alt" value="1"> Cheaper</label>
+        <label>Cheaper price <input type="text" name="item_cheaper_alt_amount" inputmode="decimal" placeholder="optional"></label>
+        <button>Add item</button>
+      </div>
+      {% if error and editing_item_id is none %}<p class="error">{{ error }}</p>{% endif %}
+    </form>
+    {% endif %}
+  </td></tr>
+  {% endif %}
+{% endif %}
+</tbody>
+{% if oob %}{% include "partials/view_total.html" %}{% endif %}

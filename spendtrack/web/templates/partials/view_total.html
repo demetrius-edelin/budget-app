@@ -1,0 +1,3 @@
+<div id="view-total" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <strong>{{ totals.total|money(nf) }} {{ currency }}</strong> <span class="muted">in {{ totals.count }} {{ 'expense' if totals.count == 1 else 'expenses' }}</span>
+</div>

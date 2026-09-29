@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import necessity_buttons, category_select, flag_fields %}
+{% block title %}Add · Spendtrack{% endblock %}
+{% block content %}
+<h1>Add</h1>
+
+{% if saved %}
+<div class="banner ok">
+  Saved <strong>#{{ saved.id }}</strong> · {{ saved.category.name }} · {{ saved.description or '' }} · <strong>{{ saved.amount_minor|money(nf) }} {{ currency }}</strong> · {{ saved.occurred_on|short_date }}
+  {% if saved_calculation %}<span class="muted">({{ saved_calculation }})</span>{% endif %}
+  {% if saved.informational %}<span class="tag muted">for information only</span>{% endif %}
+  · {{ necessity_name(saved.necessity) }}
+  · <a href="/expenses">Open in Expenses</a>
+</div>
+{% endif %}
+
+<div class="grid2">
+<section class="card">
+  <h2>Expense</h2>
+  {% if expense_error %}<p class="error">{{ expense_error }}</p>{% endif %}
+  <form method="post" action="/add/expense" class="stacked" autocomplete="off">
+    <div class="row">
+      <label>Date <input type="date" name="occurred_on" value="{{ expense_values.get('occurred_on', today|iso) }}" required></label>
+      <label>Amount ({{ currency }}) <input type="text" name="amount" inputmode="decimal" placeholder="18,50" value="{{ expense_values.get('amount', '') }}" required autofocus></label>
+    </div>
+    <label>Category {{ category_select('category_id', expense_values.get('category_id'), categories, empty_label='Pick a category', attrs='required data-fuel-select', fuel_id=fuel_category_id) }}</label>
+    <p id="fuel-hint" class="hint hidden" data-mode="{{ fuel_cost_mode }}">Driving is priced from km. A pump receipt counts the same fuel twice.</p>
+    <label>Description <input type="text" name="description" placeholder="optional" value="{{ expense_values.get('description', '') }}"></label>
+    <label>Necessity</label>
+    {{ necessity_buttons('necessity', expense_values.get('necessity', '')) }}
+    {{ flag_fields('', expense_values, nf) }}
+    <button class="primary">Save expense</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Driving</h2>
+  {% if metric_error %}<p class="error">{{ metric_error }}</p>{% endif %}
+  <form method="post" action="/add/metric" id="metric-form" class="stacked" autocomplete="off">
+    <input type="hidden" name="metric_key" value="drive">
+    <div class="row">
+      <label>Date <input type="date" name="occurred_on" value="{{ metric_values.get('occurred_on', today|iso) }}" required></label>
+      <label>Distance (km) <input type="text" name="quantity" inputmode="decimal" placeholder="42" value="{{ metric_values.get('quantity', '') }}" required></label>
+    </div>
+    <label>Description <input type="text" name="description" placeholder="optional, for example: trip to the airport" value="{{ metric_values.get('description', '') }}"></label>
+    <details {% if metric_values.get('consumption') or metric_values.get('fuel_price') %}open{% endif %}>
+      <summary>Override the defaults for this entry</summary>
+      <div class="row">
+        <label>Consumption (L/100 km) <input type="text" name="consumption" inputmode="decimal" placeholder="default" value="{{ metric_values.get('consumption', '') }}"></label>
+        <label>Fuel price ({{ currency }}/L) <input type="text" name="fuel_price" inputmode="decimal" placeholder="default" value="{{ metric_values.get('fuel_price', '') }}"></label>
+      </div>
+    </details>
+    <div id="metric-preview" class="preview" hx-post="/add/metric/preview" hx-trigger="input from:#metric-form delay:300ms, change from:#metric-form" hx-include="#metric-form" hx-target="#metric-preview" hx-swap="innerHTML">
+      <span class="muted">Enter a distance to see the cost.</span>
+    </div>
+    <label>Necessity</label>
+    {{ necessity_buttons('necessity', metric_values.get('necessity', '')) }}
+    {{ flag_fields('', metric_values, nf) }}
+    {% if fuel_cost_mode == 'receipts' %}<p class="hint">Fuel cost mode is <strong>receipts</strong>: this entry is saved for information only and does not count in totals.</p>{% endif %}
+    <button class="primary">Save drive</button>
+  </form>
+</section>
+</div>
+{% endblock %}

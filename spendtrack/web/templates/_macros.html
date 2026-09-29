@@ -1,0 +1,32 @@
+{% macro necessity_buttons(name, value) -%}
+<div class="seg seg-fill" role="radiogroup">
+  <label class="seg-item"><input type="radio" name="{{ name }}" value="" {% if value is none or value == '' or value == 'None' %}checked{% endif %}><span><i class="dot lu"></i>Unrated</span></label>
+  {% for level, label in NECESSITY_NAMES.items() -%}
+  <label class="seg-item l{{ level }}"><input type="radio" name="{{ name }}" value="{{ level }}" {% if value|string == level|string %}checked{% endif %}><span><i class="dot l{{ level }}"></i>{{ label }}</span></label>
+  {% endfor -%}
+</div>
+{%- endmacro %}
+
+{% macro category_select(name, selected, categories, empty_label=none, attrs='', fuel_id=none) -%}
+<select name="{{ name }}" {{ attrs|safe }}>
+  {% if empty_label is not none %}<option value="" {% if not selected %}selected{% endif %}>{{ empty_label }}</option>{% endif %}
+  {% for c in categories %}{% if not c.archived or c.id|string == selected|string %}
+  <option value="{{ c.id }}" {% if c.id|string == selected|string %}selected{% endif %} data-fuel="{{ '1' if fuel_id is not none and c.id == fuel_id else '0' }}">{{ c.name }}{% if c.archived %} (archived){% endif %}</option>
+  {% endif %}{% endfor %}
+</select>
+{%- endmacro %}
+
+{% macro flag_fields(prefix, values, nf) -%}
+<div class="flags">
+  <label class="check"><input type="checkbox" name="{{ prefix }}cheaper_alt" value="1" {% if values.get(prefix ~ 'cheaper_alt') in ('1', 'on', True) %}checked{% endif %} data-toggles="#{{ prefix }}cheaper-fields"> Cheaper alternative exists</label>
+  <label class="check"><input type="checkbox" name="{{ prefix }}recurring" value="1" {% if values.get(prefix ~ 'recurring') in ('1', 'on', True) %}checked{% endif %}> Recurring</label>
+</div>
+<div id="{{ prefix }}cheaper-fields" class="cheaper-fields {% if values.get(prefix ~ 'cheaper_alt') not in ('1', 'on', True) %}hidden{% endif %}">
+  <label>Cheaper price <input type="text" name="{{ prefix }}cheaper_alt_amount" inputmode="decimal" placeholder="8,00" value="{{ values.get(prefix ~ 'cheaper_alt_amount', '') }}"></label>
+  <label>Note <input type="text" name="{{ prefix }}cheaper_alt_note" placeholder="store brand" value="{{ values.get(prefix ~ 'cheaper_alt_note', '') }}"></label>
+</div>
+{%- endmacro %}
+
+{% macro change(value) -%}
+{% if value is none %}<span class="muted">no comparison</span>{% elif value > 0 %}<span class="up">{{ value|pct }}</span>{% elif value < 0 %}<span class="down">{{ value|pct }}</span>{% else %}<span class="muted">0%</span>{% endif %}
+{%- endmacro %}

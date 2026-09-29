@@ -1,0 +1,53 @@
+{% if entry %}
+{% set target = 'hx-target="#review-card" hx-swap="innerHTML"' %}
+<article class="card review" data-review-card>
+  <p class="muted">{{ index + 1 }} of {{ queue_size }} unrated · oldest first</p>
+  <h2>#{{ entry.id }} · {{ entry.category.name }} · <span class="big">{{ entry.amount_minor|money(nf) }} {{ currency }}</span></h2>
+  <p>{{ entry.occurred_on|short_date }}{% if entry.description %} · {{ entry.description }}{% endif %}{% if entry.source == 'metric' %} <span class="tag">drive</span>{% endif %}</p>
+  {% if entry.live_items %}
+  <ul class="compact-list">
+    {% for item in entry.live_items %}<li>{{ item.description }} · {{ item.amount_minor|money(nf) }}{% if item.necessity %} · {{ necessity_name(item.necessity) }}{% endif %}</li>{% endfor %}
+    <li class="muted">Unspecified · {{ remainder_minor(entry)|money(nf) }}</li>
+  </ul>
+  {% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <div class="seg">
+    {% for level, name in NECESSITY_NAMES.items() %}
+    <form hx-post="/review/{{ entry.id }}/rate" {{ target|safe }}>
+      <input type="hidden" name="index" value="{{ index }}"><input type="hidden" name="level" value="{{ level }}">
+      <button class="seg-btn l{{ level }}" data-key="{{ level }}"><kbd>{{ level }}</kbd> {{ name }}</button>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div class="row">
+    <form hx-post="/review/{{ entry.id }}/toggle" {{ target|safe }}>
+      <input type="hidden" name="index" value="{{ index }}"><input type="hidden" name="flag" value="cheaper">
+      <button class="toggle {{ 'on' if entry.cheaper_alt }}" data-key="c"><kbd>c</kbd> Cheaper alternative{% if entry.cheaper_alt %}: yes{% endif %}</button>
+    </form>
+    <form hx-post="/review/{{ entry.id }}/toggle" {{ target|safe }}>
+      <input type="hidden" name="index" value="{{ index }}"><input type="hidden" name="flag" value="recurring">
+      <button class="toggle {{ 'on' if entry.recurring }}" data-key="r"><kbd>r</kbd> Recurring{% if entry.recurring %}: yes{% endif %}</button>
+    </form>
+    {% if entry.cheaper_alt %}
+    <form hx-post="/review/{{ entry.id }}/price" {{ target|safe }} class="row">
+      <input type="hidden" name="index" value="{{ index }}">
+      <label>Cheaper price <input type="text" name="cheaper_alt_amount" inputmode="decimal" placeholder="8,00" value="{{ entry.cheaper_alt_minor|money('en-US')|replace(',', '') if entry.cheaper_alt_minor is not none else '' }}"></label>
+      <button>Set</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="row nav-row">
+    <button class="link" hx-get="/review/card?index={{ index - 1 }}" {{ target|safe }} data-key="ArrowLeft" {% if index == 0 %}disabled{% endif %}>← Previous</button>
+    <button class="link" hx-get="/review/card?index={{ index + 1 }}" {{ target|safe }} data-key="s" {% if index + 1 >= queue_size %}disabled{% endif %}><kbd>s</kbd> Skip</button>
+    <button class="link" hx-get="/review/card?index={{ index + 1 }}" {{ target|safe }} data-key="ArrowRight" {% if index + 1 >= queue_size %}disabled{% endif %}>Next →</button>
+  </div>
+</article>
+{% else %}
+<article class="card">
+  <h2>Nothing to review</h2>
+  <p class="muted">Every expense has a necessity level. <a href="/add">Add an expense</a> or open the <a href="/reports">reports</a>.</p>
+</article>
+{% endif %}
