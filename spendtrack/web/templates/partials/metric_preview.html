@@ -3,6 +3,6 @@
 {% elif quote %}
 <strong>{{ quote.amount_minor|money(nf) }} {{ currency }}</strong>
 <span class="muted">= {{ quote.calculation }}</span>
-{% for name, used in quote.params_used.items() %}{% if used.override %}<span class="tag">{{ name.split('_')[0] }} override</span>{% endif %}{% endfor %}
-{% if quote.informational %}<span class="tag muted">for information only</span>{% endif %}
+{% for name, used in quote.params_used.items() %}{% if used.override %}<span class="tag">{{ 'consum' if name.startswith('consumption') else 'preț' }} suprascris</span>{% endif %}{% endfor %}
+{% if quote.informational %}<span class="tag muted">doar informativ</span>{% endif %}
 {% endif %}

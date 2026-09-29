@@ -44,11 +44,11 @@ def review_card(request: Request, db: Session = DbDep, index: int = 0) -> Respon
 @router.post("/{expense_id}/rate")
 async def review_rate(request: Request, expense_id: int, db: Session = DbDep) -> Response:
     params = await forms.all_params(request)
-    index = forms.parse_optional_int(params.get("index"), "index") or 0
+    index = forms.parse_optional_int(params.get("index"), "indexul") or 0
     try:
         level = forms.parse_necessity(params.get("level"))
         if level is None:
-            raise SpendtrackError("Pick a level from 1 to 4.")
+            raise SpendtrackError("Alege un nivel de la 1 la 4.")
         core.update_expense(db, expense_id, necessity=level)
     except SpendtrackError as exc:
         return render(request, db, "partials/review_card.html", _card_context(db, index, str(exc)))
@@ -59,7 +59,7 @@ async def review_rate(request: Request, expense_id: int, db: Session = DbDep) ->
 @router.post("/{expense_id}/toggle")
 async def review_toggle(request: Request, expense_id: int, db: Session = DbDep) -> Response:
     params = await forms.all_params(request)
-    index = forms.parse_optional_int(params.get("index"), "index") or 0
+    index = forms.parse_optional_int(params.get("index"), "indexul") or 0
     flag = forms.text(params, "flag")
     try:
         expense = core.get_expense(db, expense_id)
@@ -68,7 +68,7 @@ async def review_toggle(request: Request, expense_id: int, db: Session = DbDep) 
         elif flag == "recurring":
             core.update_expense(db, expense_id, recurring=not expense.recurring)
         else:
-            raise SpendtrackError("Unknown flag.")
+            raise SpendtrackError("Marcaj necunoscut.")
     except SpendtrackError as exc:
         return render(request, db, "partials/review_card.html", _card_context(db, index, str(exc)))
     db.commit()
@@ -78,7 +78,7 @@ async def review_toggle(request: Request, expense_id: int, db: Session = DbDep) 
 @router.post("/{expense_id}/price")
 async def review_price(request: Request, expense_id: int, db: Session = DbDep) -> Response:
     params = await forms.all_params(request)
-    index = forms.parse_optional_int(params.get("index"), "index") or 0
+    index = forms.parse_optional_int(params.get("index"), "indexul") or 0
     try:
         minor = parse_optional_amount(forms.text(params, "cheaper_alt_amount"))
         core.update_expense(db, expense_id, cheaper_alt=True, cheaper_alt_minor=minor)

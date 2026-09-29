@@ -10,6 +10,13 @@ KEYS = (
     "ALLOW_REMOTE",
     "BASIC_AUTH_USER",
     "BASIC_AUTH_PASSWORD",
+    "TELEGRAM_BOT_TOKEN",
+    "ALLOWED_TELEGRAM_USER_IDS",
+    "AI_PROVIDER",
+    "AI_MODEL",
+    "AI_EFFORT",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
 )
 
 
@@ -47,3 +54,32 @@ def test_bad_timezone_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TIMEZONE", "Mars/Olympus")
     with pytest.raises(ConfigError, match="TIMEZONE"):
         load_config(env_file=None)
+
+
+def test_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = load_config(env_file=None)
+    assert (config.ai_provider, config.ai_model, config.ai_effort) == ("anthropic", None, "low")
+    monkeypatch.setenv("AI_EFFORT", "High")
+    monkeypatch.setenv("AI_PROVIDER", "openrouter")
+    monkeypatch.setenv("AI_MODEL", "vendor/model")
+    monkeypatch.setenv("ALLOWED_TELEGRAM_USER_IDS", "1, 2")
+    config = load_config(env_file=None)
+    assert (config.ai_provider, config.ai_model, config.ai_effort) == (
+        "openrouter",
+        "vendor/model",
+        "high",
+    )
+    assert config.allowed_telegram_user_ids == frozenset({1, 2})
+    monkeypatch.setenv("AI_EFFORT", "turbo")
+    with pytest.raises(ConfigError, match="AI_EFFORT"):
+        load_config(env_file=None)
+    monkeypatch.setenv("AI_EFFORT", "low")
+    monkeypatch.setenv("AI_MODEL", "")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
+    with pytest.raises(ConfigError, match="AI_MODEL is required"):
+        load_config(env_file=None)
+    monkeypatch.setenv("AI_MODEL", "vendor/model")
+    with pytest.raises(ConfigError, match="OPENROUTER_API_KEY is required"):
+        load_config(env_file=None)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    assert load_config(env_file=None).ai_provider == "openrouter"

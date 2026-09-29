@@ -82,7 +82,7 @@ async def add_expense(request: Request, db: Session = DbDep) -> Response:
             db,
             occurred_on=forms.parse_date(params.get("occurred_on"), default=today),
             amount_minor=parse_amount(params.get("amount")),
-            category_id=forms.parse_int(params.get("category_id"), "category"),
+            category_id=forms.parse_int(params.get("category_id"), "categoria"),
             description=forms.text(params, "description"),
             **_common_flags(params),
         )
@@ -95,8 +95,8 @@ async def add_expense(request: Request, db: Session = DbDep) -> Response:
 
 def _metric_input(params: dict[str, str], today: date) -> dict[str, Any]:
     overrides: dict[str, Decimal] = {}
-    consumption = parse_optional_decimal(params.get("consumption"), "consumption")
-    price = parse_optional_decimal(params.get("fuel_price"), "fuel price")
+    consumption = parse_optional_decimal(params.get("consumption"), "consumul")
+    price = parse_optional_decimal(params.get("fuel_price"), "prețul combustibilului")
     if consumption is not None:
         overrides["consumption_l_per_100km"] = consumption
     if price is not None:
@@ -104,7 +104,7 @@ def _metric_input(params: dict[str, str], today: date) -> dict[str, Any]:
     return {
         "metric_key": forms.text(params, "metric_key") or "drive",
         "occurred_on": forms.parse_date(params.get("occurred_on"), default=today),
-        "quantity": parse_decimal(params.get("quantity"), "quantity"),
+        "quantity": parse_decimal(params.get("quantity"), "distanța în km"),
         "overrides": overrides,
     }
 

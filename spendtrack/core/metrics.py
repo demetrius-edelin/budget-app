@@ -34,13 +34,23 @@ CALCULATOR_PARAMS: dict[str, list[str]] = {
 
 # parameter name -> (label, unit)
 PARAM_LABELS: dict[str, tuple[str, str]] = {
-    "consumption_l_per_100km": ("Consumption", "L/100 km"),
-    "fuel_price_per_l": ("Fuel price", "RON/L"),
+    "consumption_l_per_100km": ("Consum", "L/100 km"),
+    "fuel_price_per_l": ("Preț combustibil", "RON/L"),
+}
+
+# parameter name -> the form used inside a sentence ("Setează mai întâi consumul ...")
+PARAM_IN_SENTENCE: dict[str, str] = {
+    "consumption_l_per_100km": "consumul",
+    "fuel_price_per_l": "prețul combustibilului",
 }
 
 
 def param_label(name: str) -> tuple[str, str]:
     return PARAM_LABELS.get(name, (name, ""))
+
+
+def param_in_sentence(name: str) -> str:
+    return PARAM_IN_SENTENCE.get(name, name)
 
 
 def list_metric_types(session: Session) -> list[MetricType]:
@@ -50,7 +60,7 @@ def list_metric_types(session: Session) -> list[MetricType]:
 def get_metric_type(session: Session, key: str) -> MetricType:
     metric_type = session.scalar(select(MetricType).where(MetricType.key == key))
     if metric_type is None:
-        raise NotFoundError(f"Metric {key!r} does not exist.")
+        raise NotFoundError(f"Metrica {key!r} nu există.")
     return metric_type
 
 
@@ -58,7 +68,7 @@ def param_names(metric_type: MetricType) -> list[str]:
     try:
         return CALCULATOR_PARAMS[metric_type.calculator]
     except KeyError as exc:
-        raise ValidationError(f"Unknown calculator {metric_type.calculator!r}.") from exc
+        raise ValidationError(f"Calculator necunoscut {metric_type.calculator!r}.") from exc
 
 
 def param_in_force(
@@ -94,9 +104,11 @@ def set_param(
     """Add a dated parameter value. Earlier entries keep the value in force on their date."""
     metric_type = get_metric_type(session, metric_key)
     if name not in param_names(metric_type):
-        raise ValidationError(f"Unknown parameter {name!r} for {metric_type.name}.")
+        raise ValidationError(f"Parametru necunoscut {name!r} pentru {metric_type.name}.")
     if value <= 0:
-        raise ValidationError(f"The {param_label(name)[0].lower()} must be greater than zero.")
+        raise ValidationError(
+            f"{param_in_sentence(name).capitalize()} trebuie să fie mai mare decât zero."
+        )
     row = MetricParam(
         metric_type_id=metric_type.id, name=name, value=value, effective_from=effective_from
     )
@@ -108,7 +120,7 @@ def set_param(
 def delete_param(session: Session, param_id: int) -> None:
     row = session.get(MetricParam, param_id)
     if row is None:
-        raise NotFoundError(f"Parameter row {param_id} does not exist.")
+        raise NotFoundError(f"Rândul de parametru {param_id} nu există.")
     session.delete(row)
     session.flush()
 
@@ -128,8 +140,7 @@ class MetricQuote:
 
 
 def _describe(metric_type: MetricType, quantity: Decimal) -> str:
-    verb = metric_type.key[:1].upper() + metric_type.key[1:]
-    return f"{verb} {format_decimal(quantity)} {metric_type.unit}"
+    return f"{metric_type.name} {format_decimal(quantity)} {metric_type.unit}"
 
 
 def quote(
@@ -142,11 +153,11 @@ def quote(
 ) -> MetricQuote:
     """Compute the cost of a metric entry without a save."""
     if quantity <= 0:
-        raise ValidationError("The quantity must be greater than zero.")
+        raise ValidationError("Cantitatea trebuie să fie mai mare decât zero.")
     metric_type = get_metric_type(session, metric_key)
     calculator = CALCULATORS.get(metric_type.calculator)
     if calculator is None:
-        raise ValidationError(f"Unknown calculator {metric_type.calculator!r}.")
+        raise ValidationError(f"Calculator necunoscut {metric_type.calculator!r}.")
     overrides = overrides or {}
     params: dict[str, Decimal] = {}
     params_used: dict[str, dict[str, Any]] = {}
@@ -156,19 +167,21 @@ def quote(
         if name in overrides and overrides[name] is not None:
             value = Decimal(overrides[name])
             if value <= 0:
-                raise ValidationError(f"The {label.lower()} must be greater than zero.")
+                raise ValidationError(
+                    f"{param_in_sentence(name).capitalize()} trebuie să fie mai mare decât zero."
+                )
             params_used[name] = {"value": format_decimal(value), "override": True}
         else:
             row = param_in_force(session, metric_type.id, name, occurred_on)
             if row is None:
-                raise MissingParameterError(name, label)
+                raise MissingParameterError(name, param_in_sentence(name))
             value = row.value
             params_used[name] = {"value": format_decimal(value), "override": False}
         params[name] = value
         parts.append(f"{format_decimal(value)} {unit}".strip())
     amount_minor = to_minor(calculator(quantity, params))
     if amount_minor <= 0:
-        raise ValidationError("The computed cost is zero. Check the parameters.")
+        raise ValidationError("Costul calculat este zero. Verifică parametrii.")
     informational = settings_core.fuel_cost_mode(session) == "receipts"
     return MetricQuote(
         metric_type=metric_type,

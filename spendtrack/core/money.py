@@ -20,17 +20,17 @@ def parse_amount(text: str | None) -> int:
     separator is a comma or a dot. Reject thousands separators and zero.
     """
     if text is None or not text.strip():
-        raise ValidationError("Enter an amount.")
+        raise ValidationError("Introdu o sumă.")
     match = _AMOUNT_RE.match(text)
     if match is None:
         stripped = text.strip()
         if _THOUSANDS_RE.search(stripped) or (stripped.count(".") + stripped.count(",")) > 1:
-            raise ValidationError("Use no thousands separators. Write 1234,50 or 1234.50.")
-        raise ValidationError("Enter a number with up to 2 decimals, for example 18,50.")
+            raise ValidationError("Nu folosi separatori de mii. Scrie 1234,50 sau 1234.50.")
+        raise ValidationError("Introdu un număr cu cel mult 2 zecimale, de exemplu 18,50.")
     whole, fraction = match.group(1), match.group(2) or ""
     minor = int(whole) * 100 + int(fraction.ljust(2, "0"))
     if minor <= 0:
-        raise ValidationError("The amount must be greater than zero.")
+        raise ValidationError("Suma trebuie să fie mai mare decât zero.")
     return minor
 
 
@@ -41,21 +41,23 @@ def parse_optional_amount(text: str | None) -> int | None:
     return parse_amount(text)
 
 
-def parse_decimal(text: str | None, label: str = "value") -> Decimal:
+def parse_decimal(text: str | None, label: str = "valoarea") -> Decimal:
     """Parse a positive decimal number with a comma or a dot as the separator."""
     if text is None or not text.strip():
-        raise ValidationError(f"Enter the {label}.")
+        raise ValidationError(f"Introdu {label}.")
     cleaned = text.strip().replace(",", ".")
     try:
         value = Decimal(cleaned)
     except ArithmeticError as exc:
-        raise ValidationError(f"The {label} must be a number, for example 7,2.") from exc
+        raise ValidationError(
+            f"{label[:1].upper()}{label[1:]} trebuie să fie un număr, de exemplu 7,2."
+        ) from exc
     if not value.is_finite() or value <= 0:
-        raise ValidationError(f"The {label} must be greater than zero.")
+        raise ValidationError(f"{label[:1].upper()}{label[1:]} trebuie să fie mai mare decât zero.")
     return value
 
 
-def parse_optional_decimal(text: str | None, label: str = "value") -> Decimal | None:
+def parse_optional_decimal(text: str | None, label: str = "valoarea") -> Decimal | None:
     if text is None or not text.strip():
         return None
     return parse_decimal(text, label)

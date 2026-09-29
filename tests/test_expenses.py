@@ -11,10 +11,10 @@ from tests.conftest import TODAY
 
 def test_case_1_groceries_100(session: Session, category) -> None:
     expense = core.create_expense(
-        session, occurred_on=TODAY, amount_minor=10000, category_id=category("Groceries")
+        session, occurred_on=TODAY, amount_minor=10000, category_id=category("Alimente")
     )
     assert expense.id == 1
-    assert expense.category.name == "Groceries"
+    assert expense.category.name == "Alimente"
     assert expense.amount_minor == 10000
     assert expense.occurred_on == TODAY
     assert expense.necessity is None
@@ -26,7 +26,7 @@ def test_case_2_impulse_with_cheaper_price(session: Session, category) -> None:
         session,
         occurred_on=TODAY,
         amount_minor=1850,
-        category_id=category("Eating out"),
+        category_id=category("Mâncare în oraș"),
         necessity=4,
         cheaper_alt=True,
         cheaper_alt_minor=800,
@@ -46,7 +46,7 @@ def test_case_3_transport_yesterday(session: Session, category) -> None:
 
 def test_case_4_housing_takes_the_category_default(session: Session, category) -> None:
     expense = core.create_expense(
-        session, occurred_on=TODAY, amount_minor=250000, category_id=category("Housing")
+        session, occurred_on=TODAY, amount_minor=250000, category_id=category("Locuință")
     )
     assert expense.necessity == 1
 
@@ -56,7 +56,7 @@ def test_explicit_unrated_beats_the_category_default(session: Session, category)
         session,
         occurred_on=TODAY,
         amount_minor=250000,
-        category_id=category("Housing"),
+        category_id=category("Locuință"),
         necessity=None,
     )
     assert expense.necessity is None
@@ -64,7 +64,7 @@ def test_explicit_unrated_beats_the_category_default(session: Session, category)
 
 def test_subscriptions_default_to_recurring(session: Session, category) -> None:
     expense = core.create_expense(
-        session, occurred_on=TODAY, amount_minor=5000, category_id=category("Subscriptions")
+        session, occurred_on=TODAY, amount_minor=5000, category_id=category("Abonamente")
     )
     assert expense.recurring is True
 
@@ -72,13 +72,13 @@ def test_subscriptions_default_to_recurring(session: Session, category) -> None:
 def test_case_6_zero_amount_is_rejected(session: Session, category) -> None:
     with pytest.raises(ValidationError):
         core.create_expense(
-            session, occurred_on=TODAY, amount_minor=0, category_id=category("Groceries")
+            session, occurred_on=TODAY, amount_minor=0, category_id=category("Alimente")
         )
 
 
 def _groceries(session: Session, category) -> int:
     return core.create_expense(
-        session, occurred_on=TODAY, amount_minor=10000, category_id=category("Groceries")
+        session, occurred_on=TODAY, amount_minor=10000, category_id=category("Alimente")
     ).id
 
 
@@ -90,13 +90,13 @@ def test_case_11_add_item_keeps_the_total(session: Session, category) -> None:
     lines = core.expense_lines(expense)
     assert [(line.description, line.amount_minor, line.necessity) for line in lines] == [
         ("Wine", 5000, 3),
-        ("Unspecified", 5000, None),
+        ("Nespecificat", 5000, None),
     ]
 
 
 def test_case_12_items_above_the_total_are_rejected(session: Session, category) -> None:
     expense_id = _groceries(session, category)
-    with pytest.raises(ValidationError, match="exceed"):
+    with pytest.raises(ValidationError, match="depășesc"):
         core.add_items(session, expense_id, [ItemInput("Wine", 5000), ItemInput("Cheese", 6000)])
     assert core.get_expense(session, expense_id).live_items == []
 
@@ -104,7 +104,7 @@ def test_case_12_items_above_the_total_are_rejected(session: Session, category) 
 def test_case_13_amount_below_items_is_rejected(session: Session, category) -> None:
     expense_id = _groceries(session, category)
     core.add_items(session, expense_id, [ItemInput("Wine", 5000, necessity=3)])
-    with pytest.raises(ValidationError, match="below the item total of 50.00"):
+    with pytest.raises(ValidationError, match="sub totalul articolelor de 50.00"):
         core.update_expense(session, expense_id, amount_minor=4000)
     assert core.get_expense(session, expense_id).amount_minor == 10000
 
@@ -112,12 +112,12 @@ def test_case_13_amount_below_items_is_rejected(session: Session, category) -> N
 def test_case_14_item_with_its_own_category(session: Session, category) -> None:
     expense_id = _groceries(session, category)
     core.add_items(
-        session, expense_id, [ItemInput("Coffee", 1000, category_id=category("Eating out"))]
+        session, expense_id, [ItemInput("Coffee", 1000, category_id=category("Mâncare în oraș"))]
     )
     lines = core.expense_lines(core.get_expense(session, expense_id))
     assert [(line.description, line.amount_minor, line.category_name) for line in lines] == [
-        ("Coffee", 1000, "Eating out"),
-        ("Unspecified", 9000, "Groceries"),
+        ("Coffee", 1000, "Mâncare în oraș"),
+        ("Nespecificat", 9000, "Alimente"),
     ]
 
 
@@ -143,7 +143,7 @@ def test_item_inherits_the_expense_rating_and_recurring(session: Session, catego
         session,
         occurred_on=TODAY,
         amount_minor=10000,
-        category_id=category("Groceries"),
+        category_id=category("Alimente"),
         necessity=1,
         recurring=True,
     )
@@ -176,7 +176,7 @@ def test_cheaper_price_sets_the_flag_and_no_flag_clears_it(session: Session, cat
         session,
         occurred_on=TODAY,
         amount_minor=10000,
-        category_id=category("Groceries"),
+        category_id=category("Alimente"),
         cheaper_alt_minor=8000,
     )
     assert expense.cheaper_alt is True
@@ -190,7 +190,7 @@ def test_list_filters(session: Session, category) -> None:
         session,
         occurred_on=TODAY,
         amount_minor=1000,
-        category_id=category("Groceries"),
+        category_id=category("Alimente"),
         description="Bread",
         necessity=1,
     )
@@ -198,7 +198,7 @@ def test_list_filters(session: Session, category) -> None:
         session,
         occurred_on=TODAY,
         amount_minor=2000,
-        category_id=category("Eating out"),
+        category_id=category("Mâncare în oraș"),
         description="Lunch",
         cheaper_alt=True,
     )
@@ -206,5 +206,5 @@ def test_list_filters(session: Session, category) -> None:
     assert len(core.list_expenses(session, necessity=1)) == 1
     assert len(core.list_expenses(session, cheaper=True)) == 1
     assert len(core.list_expenses(session, search="bre")) == 1
-    assert len(core.list_expenses(session, category_id=category("Eating out"))) == 1
+    assert len(core.list_expenses(session, category_id=category("Mâncare în oraș"))) == 1
     assert core.unrated_count(session) == 1

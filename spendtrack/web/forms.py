@@ -29,18 +29,20 @@ def text(params: dict[str, Any], key: str) -> str | None:
     return value or None
 
 
-def parse_date(value: str | None, *, default: date | None = None, label: str = "date") -> date:
+def parse_date(value: str | None, *, default: date | None = None, label: str = "data") -> date:
     if not value:
         if default is not None:
             return default
-        raise ValidationError(f"Enter the {label}.")
+        raise ValidationError(f"Introdu {label}.")
     try:
         return date.fromisoformat(value.strip())
     except ValueError as exc:
-        raise ValidationError(f"The {label} must be a date like 2026-09-29.") from exc
+        raise ValidationError(
+            f"{label[:1].upper()}{label[1:]} trebuie să fie o dată ca 2026-09-29."
+        ) from exc
 
 
-def parse_optional_date(value: str | None, label: str = "date") -> date | None:
+def parse_optional_date(value: str | None, label: str = "data") -> date | None:
     if not value or not value.strip():
         return None
     return parse_date(value, label=label)
@@ -53,9 +55,9 @@ def parse_necessity(value: str | None) -> int | None:
     try:
         level = int(value)
     except ValueError as exc:
-        raise ValidationError("The necessity level must be between 1 and 4.") from exc
+        raise ValidationError("Nivelul de necesitate trebuie să fie între 1 și 4.") from exc
     if level not in (1, 2, 3, 4):
-        raise ValidationError("The necessity level must be between 1 and 4.")
+        raise ValidationError("Nivelul de necesitate trebuie să fie între 1 și 4.")
     return level
 
 
@@ -72,11 +74,13 @@ def parse_optional_bool(value: str | None) -> bool | None:
 
 def parse_int(value: str | None, label: str) -> int:
     if not value or not value.strip():
-        raise ValidationError(f"Enter the {label}.")
+        raise ValidationError(f"Introdu {label}.")
     try:
         return int(value.strip())
     except ValueError as exc:
-        raise ValidationError(f"The {label} must be a whole number.") from exc
+        raise ValidationError(
+            f"{label[:1].upper()}{label[1:]} trebuie să fie un număr întreg."
+        ) from exc
 
 
 def parse_optional_int(value: str | None, label: str) -> int | None:

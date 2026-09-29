@@ -1,46 +1,46 @@
 {% extends "base.html" %}
 {% from "_macros.html" import category_select %}
-{% block title %}Expenses · Spendtrack{% endblock %}
+{% block title %}Cheltuieli · Spendtrack{% endblock %}
 {% block content %}
-<h1>Expenses</h1>
+<h1>Cheltuieli</h1>
 
 <form id="filters" method="get" action="/expenses" class="filters">
-  <label>From <input type="date" name="start" value="{{ filters.start }}"></label>
-  <label>To <input type="date" name="end" value="{{ filters.end }}"></label>
-  <label>Category {{ category_select('category_id', filters.category_id, categories, empty_label='All') }}</label>
-  <label>Necessity
+  <label>De la <input type="date" name="start" value="{{ filters.start }}"></label>
+  <label>Până la <input type="date" name="end" value="{{ filters.end }}"></label>
+  <label>Categorie {{ category_select('category_id', filters.category_id, categories, empty_label='Toate') }}</label>
+  <label>Necesitate
     <select name="necessity">
-      <option value="">All</option>
-      <option value="unrated" {% if filters.necessity == 'unrated' %}selected{% endif %}>Unrated</option>
+      <option value="">Toate</option>
+      <option value="unrated" {% if filters.necessity == 'unrated' %}selected{% endif %}>Neevaluat</option>
       {% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}" {% if filters.necessity == level|string %}selected{% endif %}>{{ name }}</option>{% endfor %}
     </select>
   </label>
-  <label>Cheaper <select name="cheaper"><option value="">Any</option><option value="1" {% if filters.cheaper == '1' %}selected{% endif %}>Flagged</option><option value="0" {% if filters.cheaper == '0' %}selected{% endif %}>Not flagged</option></select></label>
-  <label>Recurring <select name="recurring"><option value="">Any</option><option value="1" {% if filters.recurring == '1' %}selected{% endif %}>Yes</option><option value="0" {% if filters.recurring == '0' %}selected{% endif %}>No</option></select></label>
-  <label>Search <input type="search" name="q" value="{{ filters.q }}" placeholder="description"></label>
-  <button>Filter</button>
-  <a href="/expenses" class="button">Clear</a>
+  <label>Mai ieftin <select name="cheaper"><option value="">Oricare</option><option value="1" {% if filters.cheaper == '1' %}selected{% endif %}>Marcate</option><option value="0" {% if filters.cheaper == '0' %}selected{% endif %}>Nemarcate</option></select></label>
+  <label>Recurent <select name="recurring"><option value="">Oricare</option><option value="1" {% if filters.recurring == '1' %}selected{% endif %}>Da</option><option value="0" {% if filters.recurring == '0' %}selected{% endif %}>Nu</option></select></label>
+  <label>Caută <input type="search" name="q" value="{{ filters.q }}" placeholder="descriere"></label>
+  <button>Filtrează</button>
+  <a href="/expenses" class="button">Șterge filtrele</a>
 </form>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <div class="toolbar">
   {% include "partials/view_total.html" %}
   <span class="spacer"></span>
-  <a class="button" href="/expenses/export.csv?mode=expenses&{{ query_string }}">Export expenses (CSV)</a>
-  <a class="button" href="/expenses/export.csv?mode=lines&{{ query_string }}">Export breakdown lines (CSV)</a>
+  <a class="button" href="/expenses/export.csv?mode=expenses&{{ query_string }}">Exportă cheltuielile (CSV)</a>
+  <a class="button" href="/expenses/export.csv?mode=lines&{{ query_string }}">Exportă liniile detaliate (CSV)</a>
 </div>
 
-{% if expenses|length >= limit %}<p class="hint">Only the newest {{ limit }} expenses are listed. Narrow the filters to see older ones.</p>{% endif %}
+{% if expenses|length >= limit %}<p class="hint">Sunt afișate doar cele mai noi {{ limit }} cheltuieli. Restrânge filtrele ca să le vezi pe cele mai vechi.</p>{% endif %}
 
 <div id="expense-table" hx-include="#filters">
 <table class="expenses">
-  <thead><tr><th>Date</th><th>Category</th><th>Description</th><th class="num">Amount</th><th>Necessity</th><th>Flags</th><th></th></tr></thead>
+  <thead><tr><th>Dată</th><th>Categorie</th><th>Descriere</th><th class="num">Sumă</th><th>Necesitate</th><th>Marcaje</th><th></th></tr></thead>
   {% for expense in expenses %}
     {% with expanded=false, mode='view', editing_item_id=none, error=none, calculation=none %}
     {% include "partials/expense_block.html" %}
     {% endwith %}
   {% else %}
-  <tbody><tr><td colspan="7" class="muted">No expenses match.</td></tr></tbody>
+  <tbody><tr><td colspan="7" class="muted">Nicio cheltuială nu corespunde.</td></tr></tbody>
   {% endfor %}
 </table>
 </div>

@@ -16,7 +16,7 @@ def test_parse_amount_accepts_both_separators(text: str, minor: int) -> None:
 
 @pytest.mark.parametrize("text", ["1.234,50", "2.500", "1,234.50"])
 def test_parse_amount_rejects_thousands_separators(text: str) -> None:
-    with pytest.raises(ValidationError, match="thousands"):
+    with pytest.raises(ValidationError, match="separatori de mii"):
         parse_amount(text)
 
 

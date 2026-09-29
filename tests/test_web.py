@@ -57,7 +57,7 @@ def _groceries_id(client: TestClient) -> int:
     with _db(client) as db:
         from spendtrack.core.categories import get_category_by_name
 
-        return get_category_by_name(db, "Groceries").id
+        return get_category_by_name(db, "Alimente").id
 
 
 def test_pages_render(client: TestClient) -> None:
@@ -84,10 +84,10 @@ def test_add_expense_then_it_shows_in_the_list(client: TestClient) -> None:
     assert response.status_code == 303
     assert response.headers["location"] == "/add?saved=1"
     page = client.get("/add?saved=1")
-    assert "Saved" in page.text and "18,50" in page.text
+    assert "Salvat" in page.text and "18,50" in page.text
     listing = client.get("/expenses")
     assert "Bread" in listing.text and "18,50" in listing.text
-    assert "cheaper 8,00" in listing.text
+    assert "mai ieftin 8,00" in listing.text
 
 
 def test_add_expense_rejects_thousands_separators(client: TestClient) -> None:
@@ -96,7 +96,7 @@ def test_add_expense_rejects_thousands_separators(client: TestClient) -> None:
         data={"amount": "1.234,50", "category_id": str(_groceries_id(client))},
     )
     assert response.status_code == 400
-    assert "thousands separators" in response.text
+    assert "separatori de mii" in response.text
     with _db(client) as db:
         assert expenses_core.list_expenses(db) == []
 
@@ -111,7 +111,7 @@ def test_metric_preview_and_save(client: TestClient) -> None:
     missing = client.post(
         "/add/metric/preview", data={"quantity": "42", "occurred_on": "2026-08-15"}
     )
-    assert "Set the consumption first in Settings." in missing.text
+    assert "Setează mai întâi consumul în Setări." in missing.text
 
     saved = client.post(
         "/add/metric",
@@ -141,7 +141,7 @@ def test_items_inline_and_totals(client: TestClient) -> None:
         data={"item_description": "Wine", "item_amount": "50", "item_necessity": "3"},
     )
     assert added.status_code == 200
-    assert "Wine" in added.text and "Unspecified" in added.text
+    assert "Wine" in added.text and "Nespecificat" in added.text
     assert 'id="view-total" hx-swap-oob="true"' in added.text
     assert "100,00" in added.text
 
@@ -150,20 +150,20 @@ def test_items_inline_and_totals(client: TestClient) -> None:
         data={"item_description": "Cheese", "item_amount": "60"},
     )
     assert rejected.status_code == 400
-    assert "exceed" in rejected.text
+    assert "depășesc" in rejected.text
 
     below = client.post(
         f"/expenses/{expense_id}/edit",
         data={"occurred_on": "2026-09-29", "amount": "40", "category_id": str(category_id)},
     )
     assert below.status_code == 400
-    assert "below the item total of 50.00" in below.text
+    assert "sub totalul articolelor de 50.00" in below.text
 
     deleted = client.post(f"/expenses/{expense_id}/delete")
-    assert "Deleted #" in deleted.text and "Restore" in deleted.text
+    assert "Șters #" in deleted.text and "Restaurează" in deleted.text
     assert "0,00" in deleted.text
     restored = client.post(f"/expenses/{expense_id}/restore")
-    assert "Deleted #" not in restored.text
+    assert "Șters #" not in restored.text
 
 
 def test_review_rates_and_moves_on(client: TestClient) -> None:
@@ -178,15 +178,15 @@ def test_review_rates_and_moves_on(client: TestClient) -> None:
         db.commit()
         first_id = first.id
     page = client.get("/review")
-    assert "1 of 2 unrated" in page.text and f"#{first_id}" in page.text
+    assert "1 din 2 neevaluate" in page.text and f"#{first_id}" in page.text
     card = client.post(f"/review/{first_id}/rate", data={"level": "3", "index": "0"})
-    assert "1 of 1 unrated" in card.text
+    assert "1 din 1 neevaluate" in card.text
     with _db(client) as db:
         assert expenses_core.get_expense(db, first_id).necessity == 3
     toggled = client.post(f"/review/{first_id + 1}/toggle", data={"flag": "cheaper", "index": "0"})
-    assert "Cheaper alternative: yes" in toggled.text
+    assert "Alternativă mai ieftină: da" in toggled.text
     done = client.post(f"/review/{first_id + 1}/rate", data={"level": "1", "index": "0"})
-    assert "Nothing to review" in done.text
+    assert "Nimic de evaluat" in done.text
 
 
 def test_csv_export(client: TestClient) -> None:
@@ -207,7 +207,7 @@ def test_csv_export(client: TestClient) -> None:
     rows = response.text.strip().splitlines()
     assert rows[0].startswith("expense_id,item_id,date")
     assert any("Wine,50.00" in row for row in rows)
-    assert any("Unspecified,50.00" in row for row in rows)
+    assert any("Nespecificat,50.00" in row for row in rows)
     plain = client.get("/expenses/export.csv?mode=expenses&start=2026-09-01")
     assert "Market,100.00,RON" in plain.text
 
@@ -223,7 +223,7 @@ def test_settings_forms(client: TestClient) -> None:
         },
         follow_redirects=True,
     )
-    assert response.status_code == 200 and "Saved." in response.text
+    assert response.status_code == 200 and "Salvat." in response.text
     assert "3000.00" in response.text
     added = client.post(
         "/settings/categories",
@@ -232,7 +232,7 @@ def test_settings_forms(client: TestClient) -> None:
     )
     assert "Pets" in added.text
     duplicate = client.post("/settings/categories", data={"name": "pets"})
-    assert duplicate.status_code == 400 and "exists" in duplicate.text
+    assert duplicate.status_code == 400 and "Există deja" in duplicate.text
     param = client.post(
         "/settings/metrics/drive/params",
         data={"name": "fuel_price_per_l", "value": "8,50", "effective_from": "2026-09-29"},
@@ -256,7 +256,7 @@ def test_reports_page_with_data(client: TestClient) -> None:
         db.commit()
     response = client.get("/reports?kind=week&date=2026-09-29")
     assert response.status_code == 200
-    assert "35,00" in response.text and "Potential saving" in response.text
+    assert "35,00" in response.text and "Economie posibilă" in response.text
     assert 'id="trend-data"' in response.text
     month = client.get("/reports?kind=month&date=not-a-date")
     assert month.status_code == 200
@@ -264,7 +264,7 @@ def test_reports_page_with_data(client: TestClient) -> None:
 
 def test_add_page_marks_the_fuel_category(client: TestClient) -> None:
     page = client.get("/add")
-    assert 'data-fuel="1">Fuel &amp; car' in page.text
+    assert 'data-fuel="1">Combustibil și mașină' in page.text
     assert 'id="fuel-hint" class="hint hidden" data-mode="km"' in page.text
 
 
@@ -315,7 +315,7 @@ def test_overview_shows_eur_from_the_latest_bnr_rate(client: TestClient) -> None
         db.commit()
     page = client.get("/")
     assert "100,00 EUR" in page.text
-    assert "at 5.2786 RON, BNR Mon 28 Sep" in page.text
+    assert "la 5,2786 RON, BNR lun 28 sep" in page.text
     assert (client.app.state.config.fx_dir / "nbrfxrates2026.xml").exists()
 
 
@@ -326,4 +326,4 @@ def test_overview_without_rates_says_so(client: TestClient) -> None:
     client.app.state.fx_fetch = broken
     page = client.get("/")
     assert page.status_code == 200
-    assert "no BNR rate yet" in page.text
+    assert "încă fără curs BNR" in page.text

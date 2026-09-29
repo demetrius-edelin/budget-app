@@ -21,32 +21,32 @@ def list_categories(session: Session, *, include_archived: bool = False) -> list
 def get_category(session: Session, category_id: int) -> Category:
     category = session.get(Category, category_id)
     if category is None:
-        raise NotFoundError(f"Category {category_id} does not exist.")
+        raise NotFoundError(f"Categoria {category_id} nu există.")
     return category
 
 
 def get_category_by_name(session: Session, name: str) -> Category:
     category = session.scalar(select(Category).where(Category.name == name))
     if category is None:
-        raise NotFoundError(f"Category {name!r} does not exist.")
+        raise NotFoundError(f"Categoria {name!r} nu există.")
     return category
 
 
 def _check_name(session: Session, name: str, *, except_id: int | None = None) -> str:
     cleaned = " ".join(name.split())
     if not cleaned:
-        raise ValidationError("The category needs a name.")
+        raise ValidationError("Categoria are nevoie de un nume.")
     query = select(Category).where(func.lower(Category.name) == cleaned.lower())
     if except_id is not None:
         query = query.where(Category.id != except_id)
     if session.scalar(query) is not None:
-        raise ValidationError(f"A category named {cleaned!r} exists.")
+        raise ValidationError(f"Există deja o categorie numită {cleaned!r}.")
     return cleaned
 
 
 def _check_necessity(value: int | None) -> int | None:
     if value is not None and value not in (1, 2, 3, 4):
-        raise ValidationError("The default necessity must be between 1 and 4.")
+        raise ValidationError("Necesitatea implicită trebuie să fie între 1 și 4.")
     return value
 
 
@@ -75,7 +75,7 @@ _FIELDS = ("name", "default_necessity", "default_recurring", "sort_order", "arch
 def update_category(session: Session, category_id: int, **changes: Any) -> Category:
     unknown = set(changes) - set(_FIELDS)
     if unknown:
-        raise ValidationError(f"Unknown fields: {', '.join(sorted(unknown))}.")
+        raise ValidationError(f"Câmpuri necunoscute: {', '.join(sorted(unknown))}.")
     category = get_category(session, category_id)
     if "name" in changes:
         category.name = _check_name(session, changes["name"], except_id=category.id)

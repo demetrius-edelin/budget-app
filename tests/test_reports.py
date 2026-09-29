@@ -9,7 +9,7 @@ from spendtrack.core.expenses import ItemInput
 from tests.conftest import TODAY
 
 
-def _add(session: Session, category, day: date, minor: int, name: str = "Groceries", **kw):
+def _add(session: Session, category, day: date, minor: int, name: str = "Alimente", **kw):
     return core.create_expense(
         session, occurred_on=day, amount_minor=minor, category_id=category(name), **kw
     )
@@ -52,16 +52,16 @@ def test_breakdown_example_from_the_specification(session: Session, category) ->
     report = reports.period_report(session, "day", TODAY, TODAY)
     assert report.total_minor == 10000
     by_level = {bucket.name: bucket.amount_minor for bucket in report.by_necessity}
-    assert by_level["Essential"] == 5000
-    assert by_level["Nice-to-have"] == 5000
+    assert by_level["Esențial"] == 5000
+    assert by_level["Plăcere"] == 5000
     assert report.discretionary_minor == 5000
     assert report.discretionary_share_pct == 50.0
 
 
 def test_flagged_and_savings(session: Session, category) -> None:
-    _add(session, category, TODAY, 1850, "Eating out", necessity=4, cheaper_alt_minor=800)
-    _add(session, category, TODAY, 3000, "Shopping", cheaper_alt=True)
-    _add(session, category, TODAY, 500, "Groceries", cheaper_alt_minor=900)
+    _add(session, category, TODAY, 1850, "Mâncare în oraș", necessity=4, cheaper_alt_minor=800)
+    _add(session, category, TODAY, 3000, "Cumpărături", cheaper_alt=True)
+    _add(session, category, TODAY, 500, "Alimente", cheaper_alt_minor=900)
     report = reports.period_report(session, "day", TODAY, TODAY)
     assert report.flagged_count == 3
     assert report.flagged_minor == 5350
@@ -71,7 +71,7 @@ def test_flagged_and_savings(session: Session, category) -> None:
 
 
 def test_recurring_total_and_daily_average(session: Session, category) -> None:
-    _add(session, category, date(2026, 9, 28), 6000, "Subscriptions")
+    _add(session, category, date(2026, 9, 28), 6000, "Abonamente")
     _add(session, category, date(2026, 9, 29), 4000)
     report = reports.period_report(session, "week", TODAY, TODAY)
     assert report.recurring_minor == 6000
@@ -87,8 +87,8 @@ def test_deleted_and_informational_rows_are_excluded(session: Session, category)
 
 
 def test_trend_and_category_table(session: Session, category) -> None:
-    _add(session, category, date(2026, 8, 15), 1000, "Groceries", necessity=1)
-    _add(session, category, date(2026, 9, 15), 2000, "Eating out", necessity=3)
+    _add(session, category, date(2026, 8, 15), 1000, "Alimente", necessity=1)
+    _add(session, category, date(2026, 9, 15), 2000, "Mâncare în oraș", necessity=3)
     trend = reports.necessity_trend(session, TODAY, months=3)
     assert [point.period.start for point in trend] == [
         date(2026, 7, 1),
@@ -98,20 +98,20 @@ def test_trend_and_category_table(session: Session, category) -> None:
     assert trend[1].by_necessity[1] == 1000
     assert trend[2].by_necessity[3] == 2000
     table = reports.category_by_month(session, TODAY, months=3)
-    assert [row.name for row in table.rows] == ["Eating out", "Groceries"]
+    assert [row.name for row in table.rows] == ["Mâncare în oraș", "Alimente"]
     assert table.totals == [0, 1000, 2000]
 
 
 def test_overview(session: Session, category) -> None:
     settings_core.set_monthly_target(session, 100000)
     _add(session, category, TODAY, 25000)
-    _add(session, category, date(2026, 9, 1), 25000, "Housing")
+    _add(session, category, date(2026, 9, 1), 25000, "Locuință")
     view = reports.overview(session, TODAY)
     assert view.day.total_minor == 25000
     assert view.month.total_minor == 50000
     assert view.target_share_pct == 50.0
     assert view.unrated == 1
-    assert view.top_categories[0].name in ("Groceries", "Housing")
+    assert view.top_categories[0].name in ("Alimente", "Locuință")
 
 
 def test_month_calendar(session: Session, category) -> None:

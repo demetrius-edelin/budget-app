@@ -73,7 +73,27 @@ def main(argv: list[str] | None = None) -> int:
     log.info("Spendtrack runs at %s", url)
     if not args.no_browser:
         open_browser_later(url)
-    uvicorn.run(app, host=config.web_host, port=config.web_port, log_config=None)
+
+    stop = threading.Event()
+    if config.telegram_bot_token:
+        from spendtrack.bot.service import BotService
+        from spendtrack.bot.telegram_api import TelegramClient
+        from spendtrack.core.ai_parse import make_parser
+
+        parser = make_parser(config.ai_provider, config.ai_model, config.ai_effort)
+        bot = BotService(config, factory, TelegramClient(config.telegram_bot_token), parser)
+        bot.start_thread(stop)
+        if not config.allowed_telegram_user_ids:
+            log.warning(
+                "ALLOWED_TELEGRAM_USER_IDS is empty. Send the bot a message and read your id here."
+            )
+    else:
+        log.info("Telegram bot is off. Set TELEGRAM_BOT_TOKEN in .env to enable it.")
+
+    try:
+        uvicorn.run(app, host=config.web_host, port=config.web_port, log_config=None)
+    finally:
+        stop.set()
     return 0
 
 

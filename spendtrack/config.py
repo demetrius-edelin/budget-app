@@ -10,6 +10,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
+AI_PROVIDERS = ("anthropic", "openai", "openrouter")
+AI_EFFORTS = ("off", "none", "minimal", "low", "medium", "high", "xhigh", "max")
+
 
 class ConfigError(Exception):
     """The .env file holds an invalid value."""
@@ -26,6 +29,11 @@ class Config:
     allow_remote: bool
     basic_auth_user: str | None
     basic_auth_password: str | None
+    telegram_bot_token: str | None = None
+    allowed_telegram_user_ids: frozenset[int] = frozenset()
+    ai_provider: str = "anthropic"
+    ai_model: str | None = None
+    ai_effort: str = "low"
 
     @property
     def db_path(self) -> Path:
@@ -100,6 +108,32 @@ def load_config(env_file: str | os.PathLike[str] | None = ".env") -> Config:
             "Set ALLOW_REMOTE=true, BASIC_AUTH_USER and BASIC_AUTH_PASSWORD to permit it."
         )
 
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip() or None
+    ids_text = os.environ.get("ALLOWED_TELEGRAM_USER_IDS", "")
+    allowed: set[int] = set()
+    for part in ids_text.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            allowed.add(int(part))
+        except ValueError as exc:
+            raise ConfigError(
+                f"ALLOWED_TELEGRAM_USER_IDS must hold numbers separated by commas, got {part!r}"
+            ) from exc
+    provider = (os.environ.get("AI_PROVIDER") or "anthropic").strip().lower()
+    if provider not in AI_PROVIDERS:
+        raise ConfigError(f"AI_PROVIDER must be one of {', '.join(AI_PROVIDERS)}, got {provider!r}")
+    ai_model = (os.environ.get("AI_MODEL") or "").strip() or None
+    if token and provider != "anthropic" and not ai_model:
+        raise ConfigError(f"AI_MODEL is required when AI_PROVIDER is {provider}")
+    key_names = {"openai": "OPENAI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+    if token and provider in key_names and not os.environ.get(key_names[provider]):
+        raise ConfigError(f"{key_names[provider]} is required when AI_PROVIDER is {provider}")
+    effort = (os.environ.get("AI_EFFORT") or "low").strip().lower()
+    if effort not in AI_EFFORTS:
+        raise ConfigError(f"AI_EFFORT must be one of {', '.join(AI_EFFORTS)}, got {effort!r}")
+
     return Config(
         data_dir=data_dir,
         web_host=web_host,
@@ -108,4 +142,9 @@ def load_config(env_file: str | os.PathLike[str] | None = ".env") -> Config:
         allow_remote=allow_remote,
         basic_auth_user=user,
         basic_auth_password=password,
+        telegram_bot_token=token,
+        allowed_telegram_user_ids=frozenset(allowed),
+        ai_provider=provider,
+        ai_model=ai_model,
+        ai_effort=effort,
     )

@@ -120,7 +120,7 @@ class Expense(Base):
         CheckConstraint(
             "necessity IS NULL OR necessity BETWEEN 1 AND 4", name="ck_expense_necessity"
         ),
-        CheckConstraint("source IN ('web', 'metric')", name="ck_expense_source"),
+        CheckConstraint("source IN ('web', 'metric', 'telegram')", name="ck_expense_source"),
     )
 
     @property
@@ -215,3 +215,34 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class InboundMessage(Base):
+    """One Telegram update: the audit log of the bot, and the guard against duplicates."""
+
+    __tablename__ = "inbound_message"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_update_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    tg_chat_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tg_message_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sender_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expense_id: Mapped[int | None] = mapped_column(ForeignKey("expense.id"), nullable=True)
+    parsed: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+    replied_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+
+    expense: Mapped[Expense | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_inbound_chat_message", "tg_chat_id", "tg_message_id"),
+        CheckConstraint(
+            "status IN ('saved', 'question', 'command', 'rejected', 'unauthorized', 'error')",
+            name="ck_inbound_status",
+        ),
+    )

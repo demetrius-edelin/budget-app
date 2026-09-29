@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% from "_macros.html" import change %}
-{% block title %}Overview · Spendtrack{% endblock %}
+{% block title %}Panou · Spendtrack{% endblock %}
 {% block content %}
-<h1>Overview <span class="muted">{{ today|short_date }}</span></h1>
+<h1>Panou <span class="muted">{{ today|short_date }}</span></h1>
 
 <section class="cards">
-  {% for label, r, note in [("Today", view.day, none), ("This week", view.week, "4-week average"), ("This month", view.month, none)] %}
+  {% for label, r, previous in [("Azi", view.day, "ziua precedentă"), ("Săptămâna aceasta", view.week, "săptămâna precedentă"), ("Luna aceasta", view.month, "luna precedentă")] %}
   <article class="card">
     <h2>{{ label }}</h2>
     <p class="big">{{ r.total_minor|money(nf) }} <span class="unit">{{ currency }}</span></p>
-    {% if fx %}<p class="eur">≈ <strong>{{ r.total_minor|eur(fx.rate)|money(nf) }} EUR</strong> <span class="muted">at {{ "%.4f"|format(fx.rate) }} RON, BNR {{ fx.day|short_date }}</span></p>
-    {% else %}<p class="eur muted">EUR: no BNR rate yet (no download so far)</p>{% endif %}
-    <p>{{ change(r.change_pct) }} vs same span of the previous {{ r.period.kind }}
+    {% if fx %}<p class="eur">≈ <strong>{{ r.total_minor|eur(fx.rate)|money(nf) }} EUR</strong> <span class="muted">la {{ fx.rate|rate }} RON, BNR {{ fx.day|short_date }}</span></p>
+    {% else %}<p class="eur muted">EUR: încă fără curs BNR (nicio descărcare până acum)</p>{% endif %}
+    <p>{{ change(r.change_pct) }} față de aceeași perioadă din {{ previous }}
       {% if r.previous_total_minor %}<span class="muted">({{ r.previous_total_minor|money(nf) }})</span>{% endif %}</p>
-    {% if r.period.kind == 'week' %}<p>{{ change(r.change_vs_four_week_pct) }} vs the 4-week average</p>{% endif %}
-    <p class="muted">{{ r.to_date.start|short_date }}{% if r.to_date.days > 1 %} – {{ r.to_date.end|short_date }}{% endif %} · {{ r.expense_count }} expenses · {{ r.daily_average_minor|money(nf) }} per day</p>
+    {% if r.period.kind == 'week' %}<p>{{ change(r.change_vs_four_week_pct) }} față de media pe 4 săptămâni</p>{% endif %}
+    <p class="muted">{{ r.to_date.start|short_date }}{% if r.to_date.days > 1 %} – {{ r.to_date.end|short_date }}{% endif %} · {{ r.expense_count }} cheltuieli · {{ r.daily_average_minor|money(nf) }} pe zi</p>
   </article>
   {% endfor %}
 </section>
@@ -24,18 +24,18 @@
     <h2>{{ calendar.period|period_label }} <span class="muted">{{ calendar.total_minor|money(nf) }} {{ currency }}</span></h2>
     <span class="spacer"></span>
     <a class="button" href="/?month={{ prev_month }}">← {{ prev_month }}</a>
-    {% if calendar.period.start != today.replace(day=1) %}<a class="button" href="/">This month</a>{% endif %}
+    {% if calendar.period.start != today.replace(day=1) %}<a class="button" href="/">Luna curentă</a>{% endif %}
     {% if show_next %}<a class="button" href="/?month={{ next_month }}">{{ next_month }} →</a>{% endif %}
   </div>
   <table class="calendar">
-    <thead><tr>{% for name in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+    <thead><tr>{% for name in ['Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm', 'Dum'] %}<th>{{ name }}</th>{% endfor %}</tr></thead>
     <tbody>
     {% for week in calendar.weeks %}
     <tr>
       {% for cell in week %}
       {% set heat = (cell.total_minor / calendar.max_day_minor) if calendar.max_day_minor and cell.in_month else 0 %}
       <td class="{{ 'out' if not cell.in_month }}{{ ' today' if cell.day == today }}{{ ' future' if cell.day > today }}" style="--heat: {{ heat|round(2) }}">
-        <a href="/expenses?start={{ cell.day|iso }}&end={{ cell.day|iso }}" title="{{ cell.day|short_date }}: {{ cell.count }} {{ 'expense' if cell.count == 1 else 'expenses' }}">
+        <a href="/expenses?start={{ cell.day|iso }}&end={{ cell.day|iso }}" title="{{ cell.day|short_date }}: {{ cell.count }} {{ 'cheltuială' if cell.count == 1 else 'cheltuieli' }}">
           <span class="day">{{ cell.day.day }}</span>
           <span class="amount">{% if cell.total_minor %}{{ cell.total_minor|money(nf) }}{% endif %}</span>
         </a>
@@ -45,23 +45,23 @@
     {% endfor %}
     </tbody>
   </table>
-  <p class="hint">Click a day to see its expenses.</p>
+  <p class="hint">Apasă pe o zi ca să vezi cheltuielile ei.</p>
 </article>
 
 <section class="grid2">
   <article class="card">
-    <h2>Month against the target</h2>
+    <h2>Luna față de țintă</h2>
     {% if view.monthly_target_minor %}
       {% set share = view.target_share_pct or 0 %}
       <div class="bar"><div class="fill {{ 'over' if share > 100 }}" style="width: {{ [share, 100]|min }}%"></div></div>
-      <p>{{ view.month.total_minor|money(nf) }} of {{ view.monthly_target_minor|money(nf) }} {{ currency }} ({{ share }}%)</p>
+      <p>{{ view.month.total_minor|money(nf) }} din {{ view.monthly_target_minor|money(nf) }} {{ currency }} ({{ share }}%)</p>
     {% else %}
-      <p class="muted">No monthly target. Set one in <a href="/settings">Settings</a>.</p>
+      <p class="muted">Nicio țintă lunară. Setează una în <a href="/settings">Setări</a>.</p>
     {% endif %}
   </article>
 
   <article class="card">
-    <h2>Necessity split, this month</h2>
+    <h2>Împărțirea pe necesitate, luna aceasta</h2>
     {% set total = view.month.total_minor %}
     <div class="stack">
       {% for b in view.month.by_necessity %}{% if b.amount_minor %}
@@ -76,26 +76,26 @@
   </article>
 
   <article class="card">
-    <h2>Where to cut, this month</h2>
+    <h2>Unde poți reduce, luna aceasta</h2>
     <dl class="facts">
-      <dt>Discretionary</dt><dd>{{ view.month.discretionary_minor|money(nf) }} {% if view.month.discretionary_share_pct is not none %}<span class="muted">({{ view.month.discretionary_share_pct }}%)</span>{% endif %}</dd>
-      <dt>Flagged as replaceable</dt><dd>{{ view.month.flagged_minor|money(nf) }} <span class="muted">on {{ view.month.flagged_count }} lines</span></dd>
-      <dt>Potential saving</dt><dd class="strong">{{ view.month.potential_saving_minor|money(nf) }} {{ currency }}</dd>
-      <dt>Recurring</dt><dd>{{ view.month.recurring_minor|money(nf) }}</dd>
+      <dt>Discreționar</dt><dd>{{ view.month.discretionary_minor|money(nf) }} {% if view.month.discretionary_share_pct is not none %}<span class="muted">({{ view.month.discretionary_share_pct }}%)</span>{% endif %}</dd>
+      <dt>Marcate ca înlocuibile</dt><dd>{{ view.month.flagged_minor|money(nf) }} <span class="muted">pe {{ view.month.flagged_count }} linii</span></dd>
+      <dt>Economie posibilă</dt><dd class="strong">{{ view.month.potential_saving_minor|money(nf) }} {{ currency }}</dd>
+      <dt>Recurente</dt><dd>{{ view.month.recurring_minor|money(nf) }}</dd>
     </dl>
-    <p><a href="/reports?kind=month">Open the month report</a></p>
+    <p><a href="/reports?kind=month">Deschide raportul lunar</a></p>
   </article>
 
   <article class="card">
-    <h2>Top categories, this month</h2>
+    <h2>Categorii principale, luna aceasta</h2>
     {% if view.top_categories %}
     <table class="compact">
       {% for b in view.top_categories %}
       <tr><td>{{ b.name }}</td><td class="num">{{ b.amount_minor|money(nf) }}</td></tr>
       {% endfor %}
     </table>
-    {% else %}<p class="muted">Nothing yet.</p>{% endif %}
-    <p>{% if view.unrated %}<a href="/review"><strong>{{ view.unrated }}</strong> unrated {{ 'expense' if view.unrated == 1 else 'expenses' }} wait for review</a>{% else %}<span class="muted">Every expense is rated.</span>{% endif %}</p>
+    {% else %}<p class="muted">Nimic încă.</p>{% endif %}
+    <p>{% if view.unrated %}<a href="/review"><strong>{{ view.unrated }}</strong> {{ 'cheltuială neevaluată așteaptă' if view.unrated == 1 else 'cheltuieli neevaluate așteaptă' }} evaluarea</a>{% else %}<span class="muted">Toate cheltuielile sunt evaluate.</span>{% endif %}</p>
   </article>
 </section>
 {% endblock %}

@@ -1,95 +1,96 @@
 {% extends "base.html" %}
 {% from "_macros.html" import necessity_buttons %}
-{% block title %}Settings · Spendtrack{% endblock %}
+{% block title %}Setări · Spendtrack{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-{% if ok %}<div class="banner ok">Saved.</div>{% endif %}
+<h1>Setări</h1>
+{% if ok %}<div class="banner ok">Salvat.</div>{% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <section class="card" id="general">
   <h2>General</h2>
   <form method="post" action="/settings/general" class="stacked">
     <div class="row">
-      <label>Fuel cost mode
+      <label>Mod cost combustibil
         <select name="fuel_cost_mode">
-          <option value="km" {% if fuel_cost_mode == 'km' %}selected{% endif %}>km: driving is priced from km</option>
-          <option value="receipts" {% if fuel_cost_mode == 'receipts' %}selected{% endif %}>receipts: pump purchases count, drives are information only</option>
+          <option value="km" {% if fuel_cost_mode == 'km' %}selected{% endif %}>km: condusul se calculează din km</option>
+          <option value="receipts" {% if fuel_cost_mode == 'receipts' %}selected{% endif %}>chitanțe: plinurile contează, drumurile sunt doar informative</option>
         </select>
       </label>
-      <label>Number format
+      <label>Format numere
         <select name="number_format">
           <option value="ro-RO" {% if number_format == 'ro-RO' %}selected{% endif %}>ro-RO (1.234,50)</option>
           <option value="en-US" {% if number_format == 'en-US' %}selected{% endif %}>en-US (1,234.50)</option>
         </select>
       </label>
-      <label>Monthly target ({{ currency }}) <input type="text" name="monthly_target" inputmode="decimal" placeholder="none" value="{{ monthly_target_minor|money('en-US')|replace(',', '') if monthly_target_minor else '' }}"></label>
-      <label>Backups to keep <input type="number" name="backup_keep_days" min="1" value="{{ backup_keep_days }}"></label>
+      <label>Țintă lunară ({{ currency }}) <input type="text" name="monthly_target" inputmode="decimal" placeholder="fără" value="{{ monthly_target_minor|money('en-US')|replace(',', '') if monthly_target_minor else '' }}"></label>
+      <label>Copii de rezervă păstrate <input type="number" name="backup_keep_days" min="1" value="{{ backup_keep_days }}"></label>
     </div>
-    <p class="hint">A change of the fuel cost mode applies to new drive entries only.</p>
-    <button class="primary">Save</button>
+    <p class="hint">O schimbare a modului de cost al combustibilului se aplică doar drumurilor noi.</p>
+    <button class="primary">Salvează</button>
   </form>
 </section>
 
 <section class="card" id="metrics">
-  <h2>Driving parameters</h2>
+  <h2>Parametri pentru condus</h2>
   {% for mt in metric_types %}
   <form method="post" action="/settings/metrics/{{ mt.key }}/params" class="row">
-    <label>Parameter
+    <label>Parametru
       <select name="name">
         {% for name in param_names[mt.key] %}<option value="{{ name }}">{{ param_label(name)[0] }} ({{ param_label(name)[1] }})</option>{% endfor %}
       </select>
     </label>
-    <label>Value <input type="text" name="value" inputmode="decimal" placeholder="7,2" required></label>
-    <label>Effective from <input type="date" name="effective_from" value="{{ today|iso }}" required></label>
-    <button>Add value</button>
+    <label>Valoare <input type="text" name="value" inputmode="decimal" placeholder="7,2" required></label>
+    <label>Valabil de la <input type="date" name="effective_from" value="{{ today|iso }}" required></label>
+    <button>Adaugă valoare</button>
   </form>
-  <p class="hint">The value in force on a date is the latest one effective on or before that date. A new value never changes earlier entries.</p>
+  <p class="hint">Valoarea în vigoare la o dată este cea mai recentă valabilă la acea dată sau înainte. O valoare nouă nu schimbă niciodată intrările anterioare.</p>
   {% set rows = history[mt.key] %}
   {% if rows %}
   <table class="compact">
-    <thead><tr><th>Parameter</th><th class="num">Value</th><th>Effective from</th><th></th></tr></thead>
+    <thead><tr><th>Parametru</th><th class="num">Valoare</th><th>Valabil de la</th><th></th></tr></thead>
     {% for row in rows %}
     <tr><td>{{ param_label(row.name)[0] }} <span class="muted">{{ param_label(row.name)[1] }}</span></td><td class="num">{{ row.value|decimal }}</td><td>{{ row.effective_from|iso }}</td>
-      <td class="actions"><form method="post" action="/settings/metrics/params/{{ row.id }}/delete"><button class="link danger">Delete</button></form></td></tr>
+      <td class="actions"><form method="post" action="/settings/metrics/params/{{ row.id }}/delete"><button class="link danger">Șterge</button></form></td></tr>
     {% endfor %}
   </table>
-  {% else %}<p class="error">No parameter yet. Add the consumption and the fuel price before the first drive entry.</p>{% endif %}
+  {% else %}<p class="error">Niciun parametru încă. Adaugă consumul și prețul combustibilului înainte de primul drum.</p>{% endif %}
   {% endfor %}
 </section>
 
 <section class="card" id="categories">
-  <h2>Categories</h2>
+  <h2>Categorii</h2>
   <table class="compact categories">
-    <thead><tr><th>Name</th><th>Default necessity</th><th>Recurring</th><th>Order</th><th>Archived</th><th></th></tr></thead>
+    <thead><tr><th>Nume</th><th>Necesitate implicită</th><th>Recurent</th><th>Ordine</th><th>Arhivată</th><th></th></tr></thead>
     {% for c in categories %}
     {% set f = 'cat-' ~ c.id %}
     <tr class="{{ 'muted' if c.archived }}">
       <td><input type="text" name="name" form="{{ f }}" value="{{ c.name }}" required></td>
-      <td><select name="default_necessity" form="{{ f }}"><option value="">none</option>{% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}" {% if c.default_necessity == level %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></td>
+      <td><select name="default_necessity" form="{{ f }}"><option value="">fără</option>{% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}" {% if c.default_necessity == level %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></td>
       <td><input type="checkbox" name="default_recurring" form="{{ f }}" value="1" {% if c.default_recurring %}checked{% endif %}></td>
       <td><input type="number" name="sort_order" form="{{ f }}" value="{{ c.sort_order }}" class="short"></td>
       <td><input type="checkbox" name="archived" form="{{ f }}" value="1" {% if c.archived %}checked{% endif %}></td>
-      <td class="actions"><button class="link" form="{{ f }}">Save</button></td>
+      <td class="actions"><button class="link" form="{{ f }}">Salvează</button></td>
     </tr>
     {% endfor %}
   </table>
   {% for c in categories %}<form id="cat-{{ c.id }}" method="post" action="/settings/categories/{{ c.id }}"></form>{% endfor %}
-  <h3>Add a category</h3>
+  <h3>Adaugă o categorie</h3>
   <form method="post" action="/settings/categories" class="row">
-    <label>Name <input type="text" name="name" required></label>
-    <label>Default necessity <select name="default_necessity"><option value="">none</option>{% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}">{{ name }}</option>{% endfor %}</select></label>
-    <label class="check"><input type="checkbox" name="default_recurring" value="1"> Recurring by default</label>
-    <button>Add</button>
+    <label>Nume <input type="text" name="name" required></label>
+    <label>Necesitate implicită <select name="default_necessity"><option value="">fără</option>{% for level, name in NECESSITY_NAMES.items() %}<option value="{{ level }}">{{ name }}</option>{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="default_recurring" value="1"> Recurent implicit</label>
+    <button>Adaugă</button>
   </form>
 </section>
 
 <section class="card" id="backups">
-  <h2>Data</h2>
-  <p>Data folder: <code>{{ data_dir }}</code></p>
+  <h2>Date</h2>
+  <p>Folder de date: <code>{{ data_dir }}</code></p>
+  <p>Bot Telegram: {% if telegram_on %}<strong>pornit</strong>, {{ telegram_ids }} {{ 'utilizator permis' if telegram_ids == 1 else 'utilizatori permiși' }}, parser <code>{{ ai_provider }}</code>{% if ai_model %} / <code>{{ ai_model }}</code>{% endif %}{% else %}oprit. Setează <code>TELEGRAM_BOT_TOKEN</code> în <code>.env</code> ca să îl pornești{% endif %}.</p>
   {% if backups %}
-  <p>Newest backups:</p>
+  <p>Cele mai noi copii de rezervă:</p>
   <ul class="compact-list">{% for b in backups %}<li><code>{{ b.name }}</code></li>{% endfor %}</ul>
-  {% else %}<p class="muted">No backup yet. The app writes one on its first start each day.</p>{% endif %}
-  <p class="hint">To restore, stop the app and copy a backup over <code>spendtrack.db</code>. See the README.</p>
+  {% else %}<p class="muted">Nicio copie de rezervă încă. Aplicația scrie una la prima pornire din fiecare zi.</p>{% endif %}
+  <p class="hint">Pentru restaurare, oprește aplicația și copiază o copie de rezervă peste <code>spendtrack.db</code>. Vezi README.</p>
 </section>
 {% endblock %}

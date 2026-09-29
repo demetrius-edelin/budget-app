@@ -46,9 +46,9 @@ class Filters:
         elif necessity_text:
             necessity = forms.parse_necessity(necessity_text)
         return cls(
-            start=forms.parse_optional_date(params.get("start"), "start date"),
-            end=forms.parse_optional_date(params.get("end"), "end date"),
-            category_id=forms.parse_optional_int(params.get("category_id"), "category"),
+            start=forms.parse_optional_date(params.get("start"), "data de început"),
+            end=forms.parse_optional_date(params.get("end"), "data de sfârșit"),
+            category_id=forms.parse_optional_int(params.get("category_id"), "categoria"),
             necessity=necessity,
             cheaper=forms.parse_optional_bool(params.get("cheaper")),
             recurring=forms.parse_optional_bool(params.get("recurring")),
@@ -266,7 +266,7 @@ async def expense_edit(request: Request, expense_id: int, db: Session = DbDep) -
     try:
         changes: dict[str, Any] = {
             "occurred_on": forms.parse_date(params.get("occurred_on")),
-            "category_id": forms.parse_int(params.get("category_id"), "category"),
+            "category_id": forms.parse_int(params.get("category_id"), "categoria"),
             "description": forms.text(params, "description"),
             "necessity": forms.parse_necessity(forms.text(params, "necessity")),
             "cheaper_alt": forms.parse_bool(params.get("cheaper_alt")),
@@ -302,7 +302,7 @@ async def expense_restore(request: Request, expense_id: int, db: Session = DbDep
 
 
 def _item_fields(params: dict[str, str]) -> dict[str, Any]:
-    category_id = forms.parse_optional_int(params.get("item_category_id"), "category")
+    category_id = forms.parse_optional_int(params.get("item_category_id"), "categoria")
     return {
         "description": forms.text(params, "item_description") or "",
         "amount_minor": parse_amount(params.get("item_amount")),

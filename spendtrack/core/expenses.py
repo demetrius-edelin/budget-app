@@ -14,14 +14,15 @@ from spendtrack.core.money import to_decimal
 from spendtrack.db.models import Category, Expense, ExpenseItem, utcnow
 
 NECESSITY_NAMES: dict[int, str] = {
-    1: "Essential",
+    1: "Esențial",
     2: "Important",
-    3: "Nice-to-have",
-    4: "Impulse",
+    3: "Plăcere",
+    4: "Impuls",
 }
-UNRATED_NAME = "Unrated"
+UNRATED_NAME = "Neevaluat"
+UNSPECIFIED_NAME = "Nespecificat"
 DISCRETIONARY_LEVELS = (3, 4)
-SOURCES = ("web", "metric")
+SOURCES = ("web", "metric", "telegram")
 
 
 class _Unset:
@@ -96,7 +97,7 @@ def _check_necessity(value: int | None) -> int | None:
     if value is None:
         return None
     if value not in NECESSITY_NAMES:
-        raise ValidationError("The necessity level must be between 1 and 4.")
+        raise ValidationError("Nivelul de necesitate trebuie să fie între 1 și 4.")
     return value
 
 
@@ -105,7 +106,7 @@ def _normalize_cheaper(
 ) -> tuple[bool, int | None, str | None]:
     """Apply the rule: a cheaper price or note sets the flag, and no flag clears both."""
     if cheaper_alt_minor is not None and cheaper_alt_minor <= 0:
-        raise ValidationError("The cheaper price must be greater than zero.")
+        raise ValidationError("Prețul mai ieftin trebuie să fie mai mare decât zero.")
     note = (cheaper_alt_note or "").strip() or None
     if cheaper_alt_minor is not None or note is not None:
         cheaper_alt = True
@@ -117,7 +118,7 @@ def _normalize_cheaper(
 def get_category(session: Session, category_id: int) -> Category:
     category = session.get(Category, category_id)
     if category is None:
-        raise NotFoundError(f"Category {category_id} does not exist.")
+        raise NotFoundError(f"Categoria {category_id} nu există.")
     return category
 
 
@@ -127,7 +128,7 @@ def get_expense(session: Session, expense_id: int, *, include_deleted: bool = Fa
         select(Expense).options(selectinload(Expense.items)).where(Expense.id == expense_id)
     )
     if expense is None or (expense.deleted_at is not None and not include_deleted):
-        raise NotFoundError(f"Expense #{expense_id} does not exist.")
+        raise NotFoundError(f"Cheltuiala #{expense_id} nu există.")
     return expense
 
 
@@ -148,9 +149,9 @@ def create_expense(
 ) -> Expense:
     """Create an expense. UNSET necessity or recurring takes the category default."""
     if amount_minor <= 0:
-        raise ValidationError("The amount must be greater than zero.")
+        raise ValidationError("Suma trebuie să fie mai mare decât zero.")
     if source not in SOURCES:
-        raise ValidationError(f"Unknown source {source!r}.")
+        raise ValidationError(f"Sursă necunoscută {source!r}.")
     category = get_category(session, category_id)
     if necessity is UNSET:
         necessity = category.default_necessity
@@ -204,21 +205,22 @@ def update_expense(session: Session, expense_id: int, **changes: Any) -> Expense
     """Change the given fields of an expense. Reject an amount below the item total."""
     unknown = set(changes) - set(_EXPENSE_FIELDS)
     if unknown:
-        raise ValidationError(f"Unknown fields: {', '.join(sorted(unknown))}.")
+        raise ValidationError(f"Câmpuri necunoscute: {', '.join(sorted(unknown))}.")
     expense = get_expense(session, expense_id)
 
     if "amount_minor" in changes:
         amount = changes["amount_minor"]
         if expense.source == "metric":
             raise ValidationError(
-                "The amount of a drive entry is read-only. Delete the entry and add it again."
+                "Suma unui drum nu se poate modifica. Șterge intrarea și adaug-o din nou."
             )
         if amount <= 0:
-            raise ValidationError("The amount must be greater than zero.")
+            raise ValidationError("Suma trebuie să fie mai mare decât zero.")
         total = items_total(expense)
         if amount < total:
             raise ValidationError(
-                f"The amount is below the item total of {_money(total)}. Change the items first."
+                f"Suma este sub totalul articolelor de {_money(total)}."
+                " Modifică mai întâi articolele."
             )
         expense.amount_minor = amount
 
@@ -267,17 +269,17 @@ def add_items(session: Session, expense_id: int, items: list[ItemInput]) -> list
     """Add items to an expense. Reject all of them if their sum exceeds the remainder."""
     expense = get_expense(session, expense_id)
     if not items:
-        raise ValidationError("Add at least one item.")
+        raise ValidationError("Adaugă cel puțin un articol.")
     for item in items:
         if not item.description.strip():
-            raise ValidationError("Each item needs a description.")
+            raise ValidationError("Fiecare articol are nevoie de o descriere.")
         if item.amount_minor <= 0:
-            raise ValidationError("Each item amount must be greater than zero.")
+            raise ValidationError("Suma fiecărui articol trebuie să fie mai mare decât zero.")
     new_total = items_total(expense) + sum(item.amount_minor for item in items)
     if new_total > expense.amount_minor:
         raise ValidationError(
-            f"Items {_money(new_total)} exceed the expense amount {_money(expense.amount_minor)}."
-            " Change the total first."
+            f"Articolele {_money(new_total)} depășesc suma cheltuielii"
+            f" {_money(expense.amount_minor)}. Modifică mai întâi totalul."
         )
     created: list[ExpenseItem] = []
     for item in items:
@@ -308,9 +310,9 @@ def add_items(session: Session, expense_id: int, items: list[ItemInput]) -> list
 def get_item(session: Session, item_id: int, *, include_deleted: bool = False) -> ExpenseItem:
     item = session.get(ExpenseItem, item_id)
     if item is None or (item.deleted_at is not None and not include_deleted):
-        raise NotFoundError(f"Item {item_id} does not exist.")
+        raise NotFoundError(f"Articolul {item_id} nu există.")
     if item.expense.deleted_at is not None and not include_deleted:
-        raise NotFoundError(f"Item {item_id} belongs to a deleted expense.")
+        raise NotFoundError(f"Articolul {item_id} aparține unei cheltuieli șterse.")
     return item
 
 
@@ -329,26 +331,26 @@ def update_item(session: Session, item_id: int, **changes: Any) -> ExpenseItem:
     """Change the given fields of an item. Reject a sum above the expense amount."""
     unknown = set(changes) - set(_ITEM_FIELDS)
     if unknown:
-        raise ValidationError(f"Unknown fields: {', '.join(sorted(unknown))}.")
+        raise ValidationError(f"Câmpuri necunoscute: {', '.join(sorted(unknown))}.")
     item = get_item(session, item_id)
     expense = item.expense
 
     if "amount_minor" in changes:
         amount = changes["amount_minor"]
         if amount <= 0:
-            raise ValidationError("The item amount must be greater than zero.")
+            raise ValidationError("Suma articolului trebuie să fie mai mare decât zero.")
         others = items_total(expense) - item.amount_minor
         if others + amount > expense.amount_minor:
             raise ValidationError(
-                f"Items {_money(others + amount)} exceed the expense amount"
-                f" {_money(expense.amount_minor)}. Change the total first."
+                f"Articolele {_money(others + amount)} depășesc suma cheltuielii"
+                f" {_money(expense.amount_minor)}. Modifică mai întâi totalul."
             )
         item.amount_minor = amount
 
     if "description" in changes:
         description = (changes["description"] or "").strip()
         if not description:
-            raise ValidationError("Each item needs a description.")
+            raise ValidationError("Fiecare articol are nevoie de o descriere.")
         item.description = description
     if "category_id" in changes:
         category_id = changes["category_id"]
@@ -381,10 +383,10 @@ def delete_item(session: Session, item_id: int) -> ExpenseItem:
 def restore_item(session: Session, item_id: int) -> ExpenseItem:
     item = get_item(session, item_id, include_deleted=True)
     if item.expense.deleted_at is not None:
-        raise ValidationError("Restore the expense first.")
+        raise ValidationError("Restaurează mai întâi cheltuiala.")
     others = items_total(item.expense)
     if others + item.amount_minor > item.expense.amount_minor:
-        raise ValidationError("The item no longer fits in the expense amount.")
+        raise ValidationError("Articolul nu mai încape în suma cheltuielii.")
     item.deleted_at = None
     session.flush()
     return item
@@ -415,7 +417,7 @@ def expense_lines(expense: Expense) -> list[Line]:
         )
     rest = remainder_minor(expense)
     if rest > 0:
-        description = "Unspecified" if lines else (expense.description or "Unspecified")
+        description = UNSPECIFIED_NAME if lines else (expense.description or UNSPECIFIED_NAME)
         lines.append(
             Line(
                 expense_id=expense.id,

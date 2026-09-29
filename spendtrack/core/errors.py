@@ -19,4 +19,4 @@ class MissingParameterError(SpendtrackError):
     def __init__(self, name: str, label: str) -> None:
         self.name = name
         self.label = label
-        super().__init__(f"Set the {label.lower()} first in Settings.")
+        super().__init__(f"Setează mai întâi {label} în Setări.")

@@ -61,13 +61,13 @@ def backup_keep_days(session: Session) -> int:
 
 def set_fuel_cost_mode(session: Session, mode: str) -> None:
     if mode not in FUEL_COST_MODES:
-        raise ValidationError("The fuel cost mode must be km or receipts.")
+        raise ValidationError("Modul de cost al combustibilului trebuie să fie km sau receipts.")
     set_setting(session, "fuel_cost_mode", mode)
 
 
 def set_number_format(session: Session, value: str) -> None:
     if value not in NUMBER_FORMATS:
-        raise ValidationError("The number format must be ro-RO or en-US.")
+        raise ValidationError("Formatul numerelor trebuie să fie ro-RO sau en-US.")
     set_setting(session, "number_format", value)
 
 
@@ -77,5 +77,5 @@ def set_monthly_target(session: Session, minor: int | None) -> None:
 
 def set_backup_keep_days(session: Session, days: int) -> None:
     if days < 1:
-        raise ValidationError("Keep at least 1 backup.")
+        raise ValidationError("Păstrează cel puțin o copie de rezervă.")
     set_setting(session, "backup_keep_days", str(days))

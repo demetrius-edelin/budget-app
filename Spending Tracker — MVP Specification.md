@@ -36,8 +36,8 @@ In the MVP:
 
 Not in the MVP:
 
-- Telegram, email or any other phone channel. The owner enters data on the laptop only.
-- Free-text parsing. Every input is a form field.
+- Email or any other phone channel besides Telegram (see section 11).
+- A hand-written text grammar. The Telegram channel parses messages with a model instead.
 - Income, accounts, balances and per-category budgets. One optional monthly target only.
 - Multiple currencies, users or vehicles. The currency field exists, but the app uses only RON.
 - Bank imports, receipt photos and scheduled digests.
@@ -144,19 +144,21 @@ Seed categories:
 
 | Category | Default necessity | Default recurring |
 | --- | --- | --- |
-| Groceries | none | no |
-| Eating out | none | no |
-| Fuel & car | none | no |
-| Housing | Essential | no |
-| Utilities | Essential | no |
-| Health | Essential | no |
+| Alimente (groceries) | none | no |
+| Mâncare în oraș (eating out) | none | no |
+| Combustibil și mașină (fuel and car) | none | no |
+| Locuință (housing) | Essential | no |
+| Utilități (utilities) | Essential | no |
+| Sănătate (health) | Essential | no |
 | Transport | none | no |
-| Subscriptions | none | yes |
-| Shopping | none | no |
-| Entertainment | none | no |
-| Personal care | none | no |
-| Gifts & other | none | no |
-| Uncategorized | none | no |
+| Abonamente (subscriptions) | none | yes |
+| Cumpărături (shopping) | none | no |
+| Divertisment (entertainment) | none | no |
+| Îngrijire personală (personal care) | none | no |
+| Cadouri și altele (gifts and other) | none | no |
+| Necategorisit (uncategorized) | none | no |
+
+The seed renames the English names of an earlier build to these names once. The necessity levels show as Esențial, Important, Plăcere and Impuls, the unrated bucket as Neevaluat, and the remainder line as Nespecificat.
 
 ### metric_type
 
@@ -259,7 +261,7 @@ Rules that keep the level low-effort:
 
 ## 7. Web app
 
-The app at http://127.0.0.1:8000 is where the owner enters, reviews, edits and analyses spending. It is built for a laptop screen, works offline and binds to localhost only.
+The app at http://127.0.0.1:8000 is where the owner enters, reviews, edits and analyses spending. It is built for a laptop screen, works offline and binds to localhost only. The interface language is Romanian, and so are the bot replies and the messages of the core. The code, the tests and this document stay in English.
 
 | Page | Contents |
 | --- | --- |
@@ -405,7 +407,90 @@ Dashboard checks:
 - The CSV export of a filtered view opens in a spreadsheet with correct amounts and dates.
 - The app refuses to start with `WEB_HOST=0.0.0.0` and no `ALLOW_REMOTE`.
 
-## 11. Build order and later work
+## 11. Telegram entry with a model parse
+
+The owner enters expenses from the phone through a Telegram bot. A model turns the free text into the form values. The core saves them with the same functions the web forms use, so every rule of this specification still applies.
+
+### Flow
+
+1. The owner sends one message to the bot, in English or Romanian: "coffee 18,50", "groceries 210, of which wine 50", "taxi ieri 35", "drove 42 km to Cluj".
+2. The app polls Telegram with long polling in a background thread of the same process. No public address is needed. Telegram keeps unread messages for 24 hours while the laptop sleeps.
+3. The app sends the text, the message date and the category list to the model, with a strict output schema: kind (expense, drive or unclear), date, amount, category, description, necessity, cheaper flag and price, recurring flag, drive quantity and overrides, items, and a question for the unclear case.
+4. The core converts the output into an entry: an unknown category becomes Uncategorized, a missing level takes the category default, a missing date takes the message date in local time.
+5. The bot replies with the saved entry: "Saved #57 · Groceries · Groceries · 210,00 RON · Tue 29 Sep", the items and the remainder, the level or "Unrated", and the calculation for a drive. For an unclear message the bot replies with the question of the model and saves nothing.
+
+### Providers
+
+The setting `AI_PROVIDER` selects the model provider. `AI_MODEL` names the model. `AI_EFFORT` sets the reasoning effort for all providers (default `low`): Anthropic takes it as `output_config.effort`, OpenAI and OpenRouter as `reasoning.effort`. The value `off` sends no effort field.
+
+| Provider | Key | Model | API call |
+| --- | --- | --- | --- |
+| `anthropic` (default) | `ANTHROPIC_API_KEY` | `claude-opus-5-5` when `AI_MODEL` is empty | Messages API with a structured output schema |
+| `openai` | `OPENAI_API_KEY` | `AI_MODEL` required | Responses API with a structured output schema |
+| `openrouter` | `OPENROUTER_API_KEY` | `AI_MODEL` required, an OpenRouter id such as `anthropic/claude-opus-5-5` | Chat completions with a JSON schema at the OpenRouter base URL |
+
+All three providers share the same prompt, schema and mapping. The model never touches the database.
+
+### Rules
+
+- The bot answers only the Telegram user ids in `ALLOWED_TELEGRAM_USER_IDS`. Any other sender gets no reply. The app logs the sender id, so the owner can find the own id at the first setup.
+- Every update becomes one `inbound_message` row with its status: saved, question, command, rejected, unauthorized or error. The row prevents a duplicate save of the same update or the same message. The row also stores the reply and the time of its delivery.
+- The model call runs with no database transaction open, so the web app can write in the meantime. The app then stores the row and the entry in one write transaction.
+- An update whose storage or reply fails is not acknowledged. The next poll delivers it again, up to three times. A stored reply that was not delivered is sent on the next attempt, without a second save.
+- An edit of a message is a new update with the same message id. The bot answers it with the rejection reply and keeps the original entry.
+- The date of an entry is the date of the message in the local time zone, not the time of processing.
+- An edited message is not applied. The bot replies that edits are not applied.
+- When the model call fails, the bot replies "Not saved" with the reason and saves nothing. The owner sends the message again.
+- When the core rejects the entry, for example items above the total, the bot replies with the rule and saves nothing. The save of an expense and its items is atomic.
+- Expenses from the bot carry the source `telegram`. Drives carry the source `metric` as before.
+
+### Commands
+
+| Command | Reply |
+| --- | --- |
+| `/help`, `/start` | Examples and the command list |
+| `/today`, `/week`, `/month` | Total, change against the same span before, discretionary, potential saving, recurring, unrated count |
+| `/last [n]` | The last n expenses with their ids (default 5) |
+| `/undo` | Soft-deletes the last expense saved from Telegram |
+| `/restore <id>` | Restores a deleted expense |
+
+### inbound_message
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | integer PK | |
+| tg_update_id | integer, unique | |
+| tg_chat_id, tg_message_id | integer | Indexed as a pair. An edit repeats the pair |
+| sender_id | integer | |
+| sent_at | timestamp | The message date from Telegram |
+| text | text, nullable | The message as sent |
+| status | text | saved, question, command, rejected, unauthorized, error |
+| error | text, nullable | |
+| expense_id | FK expense, nullable | |
+| parsed | JSON, nullable | The model output |
+| reply | text, nullable | The reply text |
+| replied_at | timestamp, nullable | Null until the reply is delivered |
+| created_at | timestamp | |
+
+### Test cases
+
+| # | Input | Expected result |
+| --- | --- | --- |
+| T1 | Model output: expense 210 Groceries with item Wine 50 | #1 saved with source telegram, item Wine, reply with "Wine 50,00 · Unspecified 160,00" |
+| T2 | Model output: drive 42 km | Fuel & car 25,04 with the calculation in the reply |
+| T3 | Message sent at 23:50 local on 28 Sep, processed on 29 Sep | `occurred_on` is 28 Sep |
+| T4 | The same update twice | One expense, one reply |
+| T5 | A sender not in the allowed list | No reply, row status unauthorized |
+| T6 | Model output: unclear with a question | Reply is the question, nothing saved |
+| T7 | Model call fails | Reply "Not saved: ...", row status error, nothing saved |
+| T8 | Model output with items above the total | Reply with the rule, nothing saved |
+| T9 | An edit of a processed message | Reply "Edits are not applied", the original entry is unchanged |
+| T11 | The reply fails to send | The entry stays saved once. The next attempt sends the stored reply and saves nothing new |
+| T12 | The write fails three times | The update is skipped and logged |
+| T13 | A second connection writes during the model call | The write succeeds |
+| T10 | `/today`, `/last`, `/undo`, `/restore` | The replies above |
+
+## 12. Build order and later work
 
 Build from the core outward, so that every rule has a test before a page depends on it.
 
@@ -416,8 +501,8 @@ Build from the core outward, so that every rule has a test before a page depends
 
 Later, outside the MVP:
 
-- A Telegram bot on the same core, with a text grammar for quick entry from the phone.
 - Email as a second input channel.
+- Automatic necessity suggestions with a decision model, applied when the confidence is high.
 - Scheduled weekly and monthly digests.
 - Receipt photos, bank CSV import, per-category budgets and more metric types.
 - A native window with pywebview, if a browser tab is not enough.

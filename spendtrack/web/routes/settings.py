@@ -36,6 +36,10 @@ def _context(request: Request, db: Session, **extra: Any) -> dict[str, Any]:
         "backup_keep_days": settings_core.backup_keep_days(db),
         "backups": backup_core.list_backups(config.backup_dir)[:5],
         "data_dir": str(config.data_dir),
+        "telegram_on": bool(config.telegram_bot_token),
+        "telegram_ids": len(config.allowed_telegram_user_ids),
+        "ai_provider": config.ai_provider,
+        "ai_model": config.ai_model,
         "error": None,
         "ok": request.query_params.get("ok") == "1",
     }
@@ -64,7 +68,7 @@ async def settings_general(request: Request, db: Session = DbDep) -> Response:
             db, parse_optional_amount(forms.text(params, "monthly_target"))
         )
         settings_core.set_backup_keep_days(
-            db, forms.parse_int(params.get("backup_keep_days"), "backup retention")
+            db, forms.parse_int(params.get("backup_keep_days"), "numărul de copii de rezervă")
         )
     except SpendtrackError as exc:
         return _fail(request, db, str(exc))
@@ -98,7 +102,7 @@ async def category_update(request: Request, category_id: int, db: Session = DbDe
             name=forms.text(params, "name") or "",
             default_necessity=forms.parse_necessity(forms.text(params, "default_necessity")),
             default_recurring=forms.parse_bool(params.get("default_recurring")),
-            sort_order=forms.parse_int(params.get("sort_order"), "order"),
+            sort_order=forms.parse_int(params.get("sort_order"), "ordinea"),
             archived=forms.parse_bool(params.get("archived")),
         )
     except SpendtrackError as exc:
@@ -113,13 +117,15 @@ async def param_add(request: Request, metric_key: str, db: Session = DbDep) -> R
     today = today_for(request)
     try:
         name = forms.text(params, "name") or ""
-        label = metrics_core.param_label(name)[0].lower()
+        label = metrics_core.param_in_sentence(name)
         metrics_core.set_param(
             db,
             metric_key,
             name,
             parse_decimal(params.get("value"), label),
-            forms.parse_date(params.get("effective_from"), default=today, label="effective date"),
+            forms.parse_date(
+                params.get("effective_from"), default=today, label="data de valabilitate"
+            ),
         )
     except SpendtrackError as exc:
         return _fail(request, db, str(exc))

@@ -18,8 +18,8 @@ def test_case_7_drive_42_km(session: Session) -> None:
     )
     expense = entry.expense
     assert expense.amount_minor == 2504
-    assert expense.category.name == "Fuel & car"
-    assert expense.description == "Drive 42 km"
+    assert expense.category.name == "Combustibil și mașină"
+    assert expense.description == "Condus 42 km"
     assert expense.source == "metric"
     assert expense.informational is False
     assert metrics.calculation_text(entry) == "42 km × 7.2 L/100 km × 8.28 RON/L"
@@ -50,7 +50,9 @@ def test_case_8_overrides_apply_to_that_entry_only(session: Session) -> None:
 
 def test_case_9_missing_parameter_saves_nothing(session: Session) -> None:
     metrics.set_param(session, "drive", "consumption_l_per_100km", Decimal("7.2"), date(2026, 8, 1))
-    with pytest.raises(MissingParameterError, match="Set the fuel price first in Settings."):
+    with pytest.raises(
+        MissingParameterError, match="Setează mai întâi prețul combustibilului în Setări."
+    ):
         metrics.quote(
             session, metric_key="drive", occurred_on=date(2026, 8, 15), quantity=Decimal("42")
         )
@@ -95,7 +97,10 @@ def test_case_19_receipts_mode_makes_drive_entries_informational(
         session, metric_key="drive", occurred_on=TODAY, quantity=Decimal("42")
     )
     expenses_core.create_expense(
-        session, occurred_on=TODAY, amount_minor=25000, category_id=category("Fuel & car")
+        session,
+        occurred_on=TODAY,
+        amount_minor=25000,
+        category_id=category("Combustibil și mașină"),
     )
     assert entry.expense.amount_minor == 2504
     assert entry.expense.informational is True
@@ -115,13 +120,13 @@ def test_metric_amount_is_read_only(session: Session) -> None:
     entry = metrics.create_metric_entry(
         session, metric_key="drive", occurred_on=TODAY, quantity=Decimal("42")
     )
-    with pytest.raises(ValidationError, match="read-only"):
+    with pytest.raises(ValidationError, match="nu se poate modifica"):
         expenses_core.update_expense(session, entry.expense_id, amount_minor=100)
 
 
 def test_quantity_with_decimals(session: Session) -> None:
     result = metrics.quote(session, metric_key="drive", occurred_on=TODAY, quantity=Decimal("12.5"))
-    assert result.description == "Drive 12.5 km"
+    assert result.description == "Condus 12.5 km"
     assert result.amount_minor == 745  # 12.5 × 0.072 × 8.28 = 7.452
 
 
@@ -138,8 +143,8 @@ def test_description_is_appended_to_the_automatic_text(session: Session) -> None
         quantity=Decimal("42"),
         description="  Trip to the airport ",
     )
-    assert entry.expense.description == "Drive 42 km · Trip to the airport"
+    assert entry.expense.description == "Condus 42 km · Trip to the airport"
     plain = metrics.create_metric_entry(
         session, metric_key="drive", occurred_on=TODAY, quantity=Decimal("10"), description="  "
     )
-    assert plain.expense.description == "Drive 10 km"
+    assert plain.expense.description == "Condus 10 km"

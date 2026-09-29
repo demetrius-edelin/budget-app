@@ -33,7 +33,7 @@ from spendtrack.core.expenses import (
     unrated_count,
 )
 from spendtrack.core.money import format_decimal, format_minor
-from spendtrack.core.periods import period_label
+from spendtrack.core.periods import month_short, period_label, short_date
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,20 @@ def _pct(value: float | None) -> str:
 def _short_date(value: date | None) -> str:
     if value is None:
         return ""
-    return value.strftime("%a %d %b")
+    return short_date(value)
+
+
+def _month_short(value: date | None) -> str:
+    if value is None:
+        return ""
+    return month_short(value)
+
+
+def _rate(value: Decimal | None) -> str:
+    """Format an exchange rate with four decimals and a comma."""
+    if value is None:
+        return ""
+    return f"{value:.4f}".replace(".", ",")
 
 
 def _iso(value: date | None) -> str:
@@ -78,6 +91,8 @@ templates.env.filters.update(
         "iso": _iso,
         "decimal": _decimal,
         "period_label": period_label,
+        "month_short": _month_short,
+        "rate": _rate,
         "eur": fx.convert_minor,
     }
 )

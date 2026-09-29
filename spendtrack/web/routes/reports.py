@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 
 from spendtrack.core import reports as core
 from spendtrack.core.errors import ValidationError
-from spendtrack.core.expenses import NECESSITY_NAMES
+from spendtrack.core.expenses import NECESSITY_NAMES, UNRATED_NAME
 from spendtrack.core.money import to_decimal
-from spendtrack.core.periods import KINDS, next_period, previous_period
+from spendtrack.core.periods import KINDS, month_short, next_period, previous_period
 from spendtrack.web import forms
 from spendtrack.web.app import DbDep, render, today_for
 
@@ -36,13 +36,13 @@ def reports_page(
     trend = core.necessity_trend(db, today, months=12)
     table = core.category_by_month(db, today, months=12)
     chart = {
-        "labels": [point.period.start.strftime("%b %y") for point in trend],
+        "labels": [month_short(point.period.start) for point in trend],
         "datasets": [
             {
                 "label": name,
                 "data": [float(to_decimal(point.by_necessity[level])) for point in trend],
             }
-            for level, name in [*NECESSITY_NAMES.items(), (None, "Unrated")]
+            for level, name in [*NECESSITY_NAMES.items(), (None, UNRATED_NAME)]
         ],
     }
     return render(

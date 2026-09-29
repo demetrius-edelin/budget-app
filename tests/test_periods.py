@@ -43,6 +43,6 @@ def test_same_span_previous_for_a_month_in_progress() -> None:
 
 
 def test_labels() -> None:
-    assert period_label(period_for("week", date(2026, 9, 21))) == "Week 21–27 Sep 2026"
-    assert period_label(period_for("day", TODAY)) == "Tue 29 Sep 2026"
-    assert period_label(period_for("month", TODAY)) == "September 2026"
+    assert period_label(period_for("week", date(2026, 9, 21))) == "Săptămâna 21–27 sep 2026"
+    assert period_label(period_for("day", TODAY)) == "mar 29 sep 2026"
+    assert period_label(period_for("month", TODAY)) == "septembrie 2026"

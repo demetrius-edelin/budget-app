@@ -7,6 +7,32 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 KINDS = ("day", "week", "month")
+WEEKDAYS = ("lun", "mar", "mie", "joi", "vin", "sâm", "dum")
+MONTHS = ("ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sep", "oct", "nov", "dec")
+MONTH_NAMES = (
+    "ianuarie",
+    "februarie",
+    "martie",
+    "aprilie",
+    "mai",
+    "iunie",
+    "iulie",
+    "august",
+    "septembrie",
+    "octombrie",
+    "noiembrie",
+    "decembrie",
+)
+
+
+def short_date(day: date) -> str:
+    """Return a short Romanian date, for example 'mar 29 sep'."""
+    return f"{WEEKDAYS[day.weekday()]} {day.day:02d} {MONTHS[day.month - 1]}"
+
+
+def month_short(day: date) -> str:
+    """Return the month and the two-digit year, for example 'sep 26'."""
+    return f"{MONTHS[day.month - 1]} {day.year % 100:02d}"
 
 
 @dataclass(frozen=True)
@@ -75,11 +101,16 @@ def shift_periods(period: Period, count: int) -> Period:
 
 
 def period_label(period: Period) -> str:
-    """Return a short label, for example 'Week 21–27 Sep 2026'."""
+    """Return a short Romanian label, for example 'Săptămâna 21–27 sep 2026'."""
     if period.kind == "day":
-        return period.start.strftime("%a %d %b %Y")
+        return f"{short_date(period.start)} {period.start.year}"
     if period.kind == "week":
-        if period.start.month == period.end.month:
-            return f"Week {period.start.day}–{period.end.day} {period.end:%b %Y}"
-        return f"Week {period.start:%d %b}–{period.end:%d %b %Y}"
-    return period.start.strftime("%B %Y")
+        end = period.end
+        if period.start.month == end.month:
+            return f"Săptămâna {period.start.day}–{end.day} {MONTHS[end.month - 1]} {end.year}"
+        start = period.start
+        return (
+            f"Săptămâna {start.day:02d} {MONTHS[start.month - 1]}–"
+            f"{end.day:02d} {MONTHS[end.month - 1]} {end.year}"
+        )
+    return f"{MONTH_NAMES[period.start.month - 1]} {period.start.year}"
