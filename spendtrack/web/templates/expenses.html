@@ -4,7 +4,9 @@
 {% block content %}
 <h1>Cheltuieli</h1>
 
-<form id="filters" method="get" action="/expenses" class="filters">
+<form id="filters" method="get" action="/expenses" class="filters"
+      hx-get="/expenses" hx-trigger="input delay:300ms, submit" hx-sync="this:replace"
+      hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-replace-url="true">
   <label>De la <input type="date" name="start" value="{{ filters.start }}"></label>
   <label>Până la <input type="date" name="end" value="{{ filters.end }}"></label>
   <label>Categorie {{ category_select('category_id', filters.category_id, categories, empty_label='Toate') }}</label>
@@ -18,9 +20,10 @@
   <label>Mai ieftin <select name="cheaper"><option value="">Oricare</option><option value="1" {% if filters.cheaper == '1' %}selected{% endif %}>Marcate</option><option value="0" {% if filters.cheaper == '0' %}selected{% endif %}>Nemarcate</option></select></label>
   <label>Recurent <select name="recurring"><option value="">Oricare</option><option value="1" {% if filters.recurring == '1' %}selected{% endif %}>Da</option><option value="0" {% if filters.recurring == '0' %}selected{% endif %}>Nu</option></select></label>
   <label>Caută <input type="search" name="q" value="{{ filters.q }}" placeholder="descriere"></label>
-  <button>Filtrează</button>
   <a href="/expenses" class="button">Șterge filtrele</a>
 </form>
+
+<div id="results">
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <div class="toolbar">
@@ -43,5 +46,6 @@
   <tbody><tr><td colspan="7" class="muted">Nicio cheltuială nu corespunde.</td></tr></tbody>
   {% endfor %}
 </table>
+</div>
 </div>
 {% endblock %}

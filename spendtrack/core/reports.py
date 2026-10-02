@@ -284,11 +284,20 @@ def overview(session: Session, today: date) -> Overview:
 
 
 @dataclass(frozen=True)
+class DayExpense:
+    category: str
+    description: str | None
+    amount_minor: int
+    necessity: int | None
+
+
+@dataclass(frozen=True)
 class CalendarDay:
     day: date
     in_month: bool
     total_minor: int
     count: int
+    expenses: tuple[DayExpense, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -299,14 +308,19 @@ class MonthCalendar:
     max_day_minor: int
 
 
-def daily_totals(session: Session, start: date, end: date) -> dict[date, tuple[int, int]]:
-    """Return {day: (total_minor, expense count)} for the counted expenses in the range."""
-    totals: dict[date, list[int]] = defaultdict(lambda: [0, 0])
+def daily_expenses(session: Session, start: date, end: date) -> dict[date, list[DayExpense]]:
+    """Return {day: expenses} for the counted expenses in the range, in the order of entry."""
+    days: dict[date, list[DayExpense]] = defaultdict(list)
     for expense in counted_expenses(session, start, end):
-        entry = totals[expense.occurred_on]
-        entry[0] += expense.amount_minor
-        entry[1] += 1
-    return {day: (values[0], values[1]) for day, values in totals.items()}
+        days[expense.occurred_on].append(
+            DayExpense(
+                expense.category.name,
+                expense.description,
+                expense.amount_minor,
+                expense.necessity,
+            )
+        )
+    return days
 
 
 def month_calendar(session: Session, anchor: date) -> MonthCalendar:
@@ -314,14 +328,15 @@ def month_calendar(session: Session, anchor: date) -> MonthCalendar:
     period = period_for("month", anchor)
     first = period.start - timedelta(days=period.start.weekday())
     last = period.end + timedelta(days=6 - period.end.weekday())
-    totals = daily_totals(session, first, last)
+    days = daily_expenses(session, first, last)
     weeks: list[list[CalendarDay]] = []
     day = first
     while day <= last:
         week: list[CalendarDay] = []
         for _ in range(7):
-            total, count = totals.get(day, (0, 0))
-            week.append(CalendarDay(day, period.contains(day), total, count))
+            expenses = tuple(days.get(day, ()))
+            total = sum(expense.amount_minor for expense in expenses)
+            week.append(CalendarDay(day, period.contains(day), total, len(expenses), expenses))
             day += timedelta(days=1)
         weeks.append(week)
     in_month = [cell for week in weeks for cell in week if cell.in_month]

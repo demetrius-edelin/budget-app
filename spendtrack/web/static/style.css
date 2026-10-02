@@ -142,6 +142,17 @@ table.calendar td.out .day, table.calendar td.out .amount { color: #b8bec8; font
 table.calendar td.future .day { color: #b8bec8; }
 table.calendar td.today { box-shadow: inset 0 0 0 2px var(--accent); }
 table.calendar td.today .day { color: var(--accent); font-weight: 700; }
+table.calendar td { position: relative; }
+.day-tip { display: none; position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: max-content; min-width: 200px; max-width: 320px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(28, 35, 48, 0.14); font-size: 0.85rem; pointer-events: none; }
+table.calendar td:hover .day-tip, table.calendar td:focus-within .day-tip { display: block; }
+table.calendar td:nth-child(n+5) .day-tip { left: auto; right: 0; }
+table.calendar tr:nth-last-child(-n+2) .day-tip { top: auto; bottom: calc(100% + 4px); }
+.day-tip .tip-head { margin: 0 0 4px; font-weight: 600; }
+.day-tip ul { list-style: none; margin: 0; padding: 0; }
+.day-tip li { display: flex; align-items: baseline; gap: 12px; padding: 2px 0; }
+.day-tip .what { flex: 1; }
+.day-tip .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.day-tip p.muted { margin: 4px 0 0; }
 .eur { margin: -2px 0 8px; }
 .small { font-size: 0.85rem; font-weight: 400; display: block; }
 tbody.exp.htmx-swapping { opacity: 0; transition: opacity 400ms ease; }

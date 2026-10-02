@@ -119,8 +119,8 @@ def test_overview(session: Session, category) -> None:
 
 
 def test_month_calendar(session: Session, category) -> None:
-    _add(session, category, date(2026, 9, 1), 1000)
-    _add(session, category, date(2026, 9, 1), 500)
+    _add(session, category, date(2026, 9, 1), 1000, description="Pâine", necessity=1)
+    _add(session, category, date(2026, 9, 1), 500, necessity=None)
     _add(session, category, date(2026, 9, 29), 2000)
     _add(session, category, date(2026, 10, 1), 9000)  # outside the month, but on the grid
     calendar = reports.month_calendar(session, TODAY)
@@ -135,6 +135,11 @@ def test_month_calendar(session: Session, category) -> None:
         1500,
         2,
     )
+    assert first.expenses == (
+        reports.DayExpense("Alimente", "Pâine", 1000, 1),
+        reports.DayExpense("Alimente", None, 500, None),
+    )
+    assert calendar.weeks[0][0].expenses == ()
     october = calendar.weeks[-1][3]
     assert (october.day, october.in_month, october.total_minor) == (date(2026, 10, 1), False, 9000)
     assert calendar.total_minor == 3500

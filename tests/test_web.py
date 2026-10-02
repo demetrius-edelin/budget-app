@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
@@ -88,6 +89,27 @@ def test_add_expense_then_it_shows_in_the_list(client: TestClient) -> None:
     listing = client.get("/expenses")
     assert "Bread" in listing.text and "18,50" in listing.text
     assert "mai ieftin 8,00" in listing.text
+
+
+def test_expenses_search_updates_the_results_as_you_type(client: TestClient) -> None:
+    groceries = _groceries_id(client)
+    with _db(client) as db:
+        for description in ("Abonament Telegram", "Leroy"):
+            expenses_core.create_expense(
+                db,
+                occurred_on=date(2026, 9, 29),
+                amount_minor=1000,
+                category_id=groceries,
+                description=description,
+            )
+        db.commit()
+    page = client.get("/expenses")
+    assert 'hx-trigger="input delay:300ms, submit"' in page.text
+    assert 'hx-select="#results"' in page.text and 'id="results"' in page.text
+    live = client.get("/expenses?q=abo", headers={"HX-Request": "true"})
+    results = live.text[live.text.index('id="results"') :]
+    assert "Abonament Telegram" in results and "Leroy" not in results
+    assert "în 1 cheltuială" in results
 
 
 def test_add_expense_rejects_thousands_separators(client: TestClient) -> None:
@@ -302,6 +324,46 @@ def test_overview_calendar_links_to_the_day(client: TestClient) -> None:
     day_view = client.get("/expenses?start=2026-09-12&end=2026-09-12")
     assert "123,45" in day_view.text
     assert client.get("/?month=garbage").status_code == 200
+
+
+def test_overview_calendar_tooltip_lists_the_expenses_of_the_day(client: TestClient) -> None:
+    groceries = _groceries_id(client)
+    with _db(client) as db:
+        for amount, description, necessity in ((1250, "Pâine și lapte", 4), (4000, None, None)):
+            expenses_core.create_expense(
+                db,
+                occurred_on=date(2026, 9, 12),
+                amount_minor=amount,
+                category_id=groceries,
+                description=description,
+                necessity=necessity,
+            )
+        db.commit()
+    page = client.get("/?month=2026-09").text
+    assert page.count('class="day-tip"') == 1
+    tip = page.split('class="day-tip"')[1].split("</div>")[0]
+    assert "2 cheltuieli" in tip
+    assert "Pâine și lapte" in tip
+    assert "12,50" in tip
+    assert "40,00" in tip
+    assert 'class="dot l4"' in tip
+    assert 'class="dot lu"' in tip
+    assert "Impuls" not in tip
+
+
+def test_static_links_carry_a_version(client: TestClient) -> None:
+    page = client.get("/").text
+    for name in ("style.css", "htmx.min.js", "app.js"):
+        assert re.search(rf'"/static/{re.escape(name)}\?v=\d+"', page), name
+    assert client.get("/static/style.css?v=1").status_code == 200
+
+
+def test_overview_and_reports_reload_on_the_next_day(client: TestClient) -> None:
+    for path in ("/", "/reports"):
+        match = re.search(r'<body data-reload-in="(\d+)">', client.get(path).text)
+        assert match is not None
+        assert 0 <= int(match.group(1)) <= 25 * 3600 * 1000
+    assert "data-reload-in" not in client.get("/add").text
 
 
 def test_overview_shows_eur_from_the_latest_bnr_rate(client: TestClient) -> None:

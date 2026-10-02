@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import change %}
 {% block title %}Rapoarte · Spendtrack{% endblock %}
+{% block body_attrs %} data-reload-in="{{ ms_to_next_day }}"{% endblock %}
 {% block content %}
 <h1>Rapoarte</h1>
 
@@ -93,5 +94,5 @@
   </table>
   </div>
 </section>
-<script src="/static/chart.umd.js"></script>
+<script src="{{ static('chart.umd.js') }}"></script>
 {% endblock %}

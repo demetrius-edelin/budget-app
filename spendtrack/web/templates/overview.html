@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import change %}
 {% block title %}Panou · Spendtrack{% endblock %}
+{% block body_attrs %} data-reload-in="{{ ms_to_next_day }}"{% endblock %}
 {% block content %}
 <h1>Panou <span class="muted">{{ today|short_date }}</span></h1>
 
@@ -35,10 +36,21 @@
       {% for cell in week %}
       {% set heat = (cell.total_minor / calendar.max_day_minor) if calendar.max_day_minor and cell.in_month else 0 %}
       <td class="{{ 'out' if not cell.in_month }}{{ ' today' if cell.day == today }}{{ ' future' if cell.day > today }}" style="--heat: {{ heat|round(2) }}">
-        <a href="/expenses?start={{ cell.day|iso }}&end={{ cell.day|iso }}" title="{{ cell.day|short_date }}: {{ cell.count }} {{ 'cheltuială' if cell.count == 1 else 'cheltuieli' }}">
+        <a href="/expenses?start={{ cell.day|iso }}&end={{ cell.day|iso }}">
           <span class="day">{{ cell.day.day }}</span>
           <span class="amount">{% if cell.total_minor %}{{ cell.total_minor|money(nf) }}{% endif %}</span>
         </a>
+        {% if cell.expenses %}
+        <div class="day-tip" role="tooltip">
+          <p class="tip-head">{{ cell.day|short_date }} · {{ cell.count }} {{ 'cheltuială' if cell.count == 1 else 'cheltuieli' }}</p>
+          <ul>
+            {% for e in cell.expenses[:10] %}
+            <li><span class="what">{{ e.description or e.category }}{% if e.description %} <span class="muted">{{ e.category }}</span>{% endif %} <span class="dot l{{ e.necessity or 'u' }}"></span></span><span class="num">{{ e.amount_minor|money(nf) }}</span></li>
+            {% endfor %}
+          </ul>
+          {% if cell.count > 10 %}<p class="muted">încă {{ cell.count - 10 }}</p>{% endif %}
+        </div>
+        {% endif %}
       </td>
       {% endfor %}
     </tr>

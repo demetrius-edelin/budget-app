@@ -1,4 +1,5 @@
-// Small behaviors: keyboard shortcuts on Review, the fuel hint on Add, the trend chart on Reports.
+// Small behaviors: keyboard shortcuts on Review, the fuel hint on Add, the live filters on Expenses,
+// the reload on a new day, the trend chart on Reports.
 (function () {
   "use strict";
 
@@ -31,6 +32,33 @@
     }
   });
   updateFuelHint();
+
+  // Expenses: the filters apply as you type. Send only the filters that have a value,
+  // so that the address bar shows a short URL.
+  document.addEventListener("htmx:configRequest", function (event) {
+    if (event.detail.elt.id !== "filters") { return; }
+    var params = event.detail.parameters;
+    Array.from(params.keys()).forEach(function (name) {
+      if (params[name] === "") { delete params[name]; }
+    });
+  });
+
+  // Overview and Reports: reload after the local midnight, so that "today" moves to the new day.
+  // The deadline uses the browser clock plus the server countdown, so a clock difference does not matter.
+  // Browsers pause timers in hidden tabs and in sleep, so also check when the tab shows again.
+  var reloadIn = document.body.dataset.reloadIn;
+  if (reloadIn) {
+    var reloadAt = Date.now() + Number(reloadIn);
+    var reloadIfNewDay = function () {
+      if (Date.now() >= reloadAt) { window.location.reload(); }
+    };
+    setInterval(reloadIfNewDay, 60000);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") { reloadIfNewDay(); }
+    });
+    window.addEventListener("pageshow", reloadIfNewDay);
+    window.addEventListener("focus", reloadIfNewDay);
+  }
 
   // Reports: the 12-month stacked bar chart.
   var data = document.getElementById("trend-data");

@@ -8,7 +8,7 @@ import logging
 import secrets
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -83,6 +83,15 @@ def _decimal(value: Decimal | str | None) -> str:
     return format_decimal(Decimal(value))
 
 
+def _static(name: str) -> str:
+    """Return the URL of a static file with its change time, so that a browser gets each change."""
+    try:
+        version = (WEB_DIR / "static" / name).stat().st_mtime_ns
+    except OSError:
+        return f"/static/{name}"
+    return f"/static/{name}?v={version}"
+
+
 templates.env.filters.update(
     {
         "money": _money,
@@ -103,6 +112,7 @@ templates.env.globals.update(
         "expense_lines": expense_lines,
         "remainder_minor": remainder_minor,
         "items_total": items_total,
+        "static": _static,
     }
 )
 
@@ -129,6 +139,14 @@ def today_for(request: Request) -> date:
     return datetime.now(config.tz).date()
 
 
+def ms_to_next_day(request: Request) -> int:
+    """Return the milliseconds until the next local midnight. A page reloads at that time."""
+    config: Config = request.app.state.config
+    now = datetime.now(config.tz)
+    midnight = datetime.combine(now.date() + timedelta(days=1), time(), tzinfo=config.tz)
+    return max(0, int((midnight - now).total_seconds() * 1000))
+
+
 def render(
     request: Request,
     db: Session,
@@ -137,11 +155,15 @@ def render(
     *,
     status_code: int = 200,
 ) -> Response:
-    """Render a template with the shared context: number format, currency, today, unrated count."""
+    """Render a template with the shared context: number format, currency, today, unrated count.
+
+    The context also holds the milliseconds until the next local day.
+    """
     base: dict[str, Any] = {
         "nf": settings_core.number_format(db),
         "currency": settings_core.currency(db),
         "today": today_for(request),
+        "ms_to_next_day": ms_to_next_day(request),
         "unrated": unrated_count(db),
         "is_htmx": request.headers.get("HX-Request") == "true",
     }
