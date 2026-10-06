@@ -208,3 +208,32 @@ def test_list_filters(session: Session, category) -> None:
     assert len(core.list_expenses(session, search="bre")) == 1
     assert len(core.list_expenses(session, category_id=category("Mâncare în oraș"))) == 1
     assert core.unrated_count(session) == 1
+
+
+def test_necessity_filter_matches_the_breakdown_lines(session: Session, category) -> None:
+    groceries = category("Alimente")
+    market = core.create_expense(
+        session, occurred_on=TODAY, amount_minor=10000, category_id=groceries, necessity=3
+    )
+    (chocolate,) = core.add_items(session, market.id, [ItemInput("Chocolate", 1500, necessity=4)])
+    covered = core.create_expense(
+        session, occurred_on=TODAY, amount_minor=2000, category_id=groceries, necessity=2
+    )
+    core.add_items(session, covered.id, [ItemInput("Soap", 2000, necessity=1)])
+    inherited = core.create_expense(
+        session, occurred_on=TODAY, amount_minor=3000, category_id=groceries, necessity=2
+    )
+    core.add_items(session, inherited.id, [ItemInput("Milk", 3000)])
+
+    def ids(level: int) -> set[int]:
+        return {e.id for e in core.list_expenses(session, necessity=level)}
+
+    assert ids(4) == {market.id}
+    assert ids(3) == {market.id}
+    assert ids(2) == {inherited.id}  # the items of "covered" leave no line at level 2
+    assert ids(1) == {covered.id}
+    lines = core.lines_with_necessity(core.get_expense(session, market.id), 4)
+    assert [(line.description, line.amount_minor) for line in lines] == [("Chocolate", 1500)]
+
+    core.delete_item(session, chocolate.id)
+    assert ids(4) == set()

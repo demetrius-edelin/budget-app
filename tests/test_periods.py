@@ -1,6 +1,7 @@
 from datetime import date
 
 from spendtrack.core.periods import (
+    match_period,
     month_short,
     period_for,
     period_label,
@@ -52,3 +53,10 @@ def test_labels() -> None:
 def test_month_short_spells_the_year() -> None:
     assert month_short(date(2025, 10, 1)) == "oct 2025"
     assert month_short(TODAY) == "sep 2026"
+
+
+def test_match_period_finds_the_kind_of_a_date_range() -> None:
+    assert match_period(TODAY, TODAY) == period_for("day", TODAY)
+    assert match_period(date(2026, 9, 28), date(2026, 10, 4)) == period_for("week", TODAY)
+    assert match_period(date(2026, 9, 1), date(2026, 9, 30)) == period_for("month", TODAY)
+    assert match_period(date(2026, 9, 2), date(2026, 9, 8)) is None

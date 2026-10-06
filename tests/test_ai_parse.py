@@ -12,7 +12,13 @@ from sqlalchemy.orm import Session
 from spendtrack.core import ai_parse
 from spendtrack.core.ai_claude import ClaudeParser
 from spendtrack.core.ai_openai import OpenAIParser, OpenRouterParser
-from spendtrack.core.ai_parse import ParsedEntry, ParsedItem, draft_from_entry, make_parser
+from spendtrack.core.ai_parse import (
+    ImageInput,
+    ParsedEntry,
+    ParsedItem,
+    draft_from_entry,
+    make_parser,
+)
 from spendtrack.core.categories import list_categories
 from spendtrack.core.errors import ValidationError
 from spendtrack.core.expenses import UNSET
@@ -95,6 +101,42 @@ def test_bad_amount_from_the_model_is_rejected(session: Session) -> None:
     entry = ParsedEntry(kind="expense", amount="1.234,50", category="Alimente")
     with pytest.raises(ValidationError):
         draft_from_entry(entry, list_categories(session), TODAY)
+
+
+def test_user_message_for_a_photo_holds_the_caption() -> None:
+    text = ai_parse.build_user_message("ieri", TODAY, ["Alimente"], has_image=True)
+    assert text.endswith("The owner sent the attached photo. Caption:\nieri")
+    bare = ai_parse.build_user_message("", TODAY, ["Alimente"], has_image=True)
+    assert bare.endswith("Caption:\n(none)")
+
+
+RECEIPT = ParsedEntry(
+    kind="expense",
+    amount="11",
+    category="Alimente",
+    description="Lidl",
+    items=[
+        ParsedItem(description="Varza alba", amount="5.45"),
+        ParsedItem(description="Zucchini", amount="5.44"),
+    ],
+)
+
+
+def test_receipt_items_that_break_a_rule_are_dropped(session: Session) -> None:
+    categories = list_categories(session)
+    draft = draft_from_entry(RECEIPT, categories, TODAY, from_image=True)
+    assert [i.amount_minor for i in draft.items] == [545, 544] and draft.note is None
+    above = RECEIPT.model_copy(update={"amount": "10"})
+    draft = draft_from_entry(above, categories, TODAY, from_image=True)
+    assert (draft.amount_minor, draft.items, draft.note) == (1000, [], ai_parse.ITEMS_DROPPED_NOTE)
+    negative = RECEIPT.model_copy(
+        update={"items": [*RECEIPT.items, ParsedItem(description="Reducere", amount="-1")]}
+    )
+    draft = draft_from_entry(negative, categories, TODAY, from_image=True)
+    assert (draft.items, draft.note) == ([], ai_parse.ITEMS_DROPPED_NOTE)
+    # A text message keeps the strict rule: the owner sees the error and sends it again.
+    with pytest.raises(ValidationError):
+        draft_from_entry(negative, categories, TODAY)
 
 
 def test_make_parser_needs_a_model_for_openai_and_openrouter(
@@ -195,3 +237,66 @@ def test_openrouter_parser_plumbing() -> None:
         "x", message_date=TODAY, categories=[]
     )
     assert calls[1]["extra_body"] == {"reasoning": {"effort": "high"}}
+
+
+PHOTO = ImageInput(data=b"\xff\xd8jpeg", media_type="image/jpeg")
+PHOTO_B64 = "/9hqcGVn"
+
+
+def test_claude_parser_sends_the_photo_before_the_text() -> None:
+    calls: list[dict] = []
+
+    def fake_parse(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            stop_reason="end_turn",
+            parsed_output=ENTRY,
+            usage=SimpleNamespace(input_tokens=1500, output_tokens=300),
+        )
+
+    client = SimpleNamespace(messages=SimpleNamespace(parse=fake_parse))
+    ClaudeParser(client=client).parse("ieri", message_date=TODAY, categories=[], image=PHOTO)
+    image, text = calls[0]["messages"][0]["content"]
+    assert image == {
+        "type": "image",
+        "source": {"type": "base64", "media_type": "image/jpeg", "data": PHOTO_B64},
+    }
+    assert text["type"] == "text" and text["text"].endswith("Caption:\nieri")
+
+
+def test_openai_parser_sends_the_photo_before_the_text() -> None:
+    calls: list[dict] = []
+
+    def fake_parse(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(output_parsed=ENTRY)
+
+    client = SimpleNamespace(responses=SimpleNamespace(parse=fake_parse))
+    OpenAIParser("m", client=client).parse("", message_date=TODAY, categories=[], image=PHOTO)
+    (turn,) = calls[0]["input"]
+    image, text = turn["content"]
+    assert turn["role"] == "user"
+    assert image == {
+        "type": "input_image",
+        "image_url": f"data:image/jpeg;base64,{PHOTO_B64}",
+        "detail": "high",
+    }
+    assert text["type"] == "input_text" and text["text"].endswith("Caption:\n(none)")
+
+
+def test_openrouter_parser_sends_the_photo_before_the_text() -> None:
+    calls: list[dict] = []
+
+    def fake_parse(**kwargs):
+        calls.append(kwargs)
+        message = SimpleNamespace(parsed=ENTRY, refusal=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=fake_parse)))
+    OpenRouterParser("v/m", client=client).parse("", message_date=TODAY, categories=[], image=PHOTO)
+    image, text = calls[0]["messages"][1]["content"]
+    assert image == {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/jpeg;base64,{PHOTO_B64}", "detail": "high"},
+    }
+    assert text["type"] == "text"

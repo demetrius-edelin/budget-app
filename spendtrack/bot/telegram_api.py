@@ -32,12 +32,15 @@ class TelegramApi(Protocol):
         self, chat_id: int, text: str, reply_to_message_id: int | None = None
     ) -> None: ...
 
+    def download_file(self, file_id: str) -> bytes: ...
+
 
 class TelegramClient:
     """Call the Bot API over HTTPS with the standard library."""
 
     def __init__(self, token: str) -> None:
         self._base = f"https://api.telegram.org/bot{token}/"
+        self._file_base = f"https://api.telegram.org/file/bot{token}/"
 
     def _call(self, method: str, params: dict[str, Any], timeout: float) -> Any:
         body = json.dumps(params).encode("utf-8")
@@ -86,3 +89,19 @@ class TelegramClient:
                 "allow_sending_without_reply": True,
             }
         self._call("sendMessage", params, timeout=20)
+
+    def download_file(self, file_id: str) -> bytes:
+        """Download a file that a user sent, for example a photo. The Bot API allows 20 MB."""
+        result = self._call("getFile", {"file_id": file_id}, timeout=20) or {}
+        file_path = result.get("file_path")
+        if not file_path:
+            raise TelegramError("getFile returned no file path", status=400)
+        try:
+            with urllib.request.urlopen(self._file_base + file_path, timeout=60) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            raise TelegramError(
+                f"File download failed with HTTP {exc.code}", status=exc.code
+            ) from None
+        except urllib.error.URLError as exc:
+            raise TelegramError(f"File download failed: {exc.reason}") from None

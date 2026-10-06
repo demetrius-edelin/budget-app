@@ -7,6 +7,7 @@ The interface and the Telegram bot use Romanian. Amounts are in Romanian lei (RO
 ## Features
 
 - **Add expenses from Telegram.** Send a short message from your phone, for example `cafea 18,50` or `taxi ieri 35`. A language model reads the message, and the bot replies with the saved entry. Anthropic, OpenAI and OpenRouter are the supported model providers.
+- **Send a photo of a receipt.** The total of the receipt becomes the expense, and each article becomes an item of the expense.
 - **Rate each expense.** Give each expense one of four necessity levels: Esențial (essential), Important, Util (useful) or Impuls (impulse). You can also mark an expense as recurring, or record a cheaper option.
 - **See where you can save.** The reports add the Impuls expenses to the difference between each expense and its cheaper option.
 - **Log a drive in km.** The app calculates the fuel cost from the fuel consumption of your car and the fuel price.
@@ -18,7 +19,7 @@ The interface and the Telegram bot use Romanian. Amounts are in Romanian lei (RO
 
 The web app and the database stay on your computer. The app downloads the BNR exchange rate file once per day.
 
-The Telegram bot is optional. If you use it, the app sends the text and the date of each message to the model provider that you choose. The app also sends the names of your categories. Telegram receives your messages too, because the bot uses the Telegram service.
+The Telegram bot is optional. If you use it, the app sends the text and the date of each message to the model provider that you choose. The app also sends the names of your categories. If you send a photo, the app sends the photo and its caption to the model provider. The app does not keep the photo. Telegram receives your messages too, because the bot uses the Telegram service.
 
 ## Requirements
 
@@ -61,6 +62,8 @@ The navigation bar shows the Romanian page names. The English names are in paren
 - **Panou (Overview)**: today, this week and this month, with a month calendar. Click a day to see its expenses. The page also shows the month against your target, the split by necessity level, where you can cut, and the top categories. The three period cards also show the totals in EUR. If the network is not available, the app uses the last downloaded rate.
 - **+ (Add)**: enter an expense, or a drive in km. The drive form shows the calculated cost before you save it.
 - **Cheltuieli (Expenses)**: the filters apply while you type. You can edit an expense in the table, add items to an expense, delete with Undo and export to CSV.
+  - The period bar shows all expenses, or one day, week or month. Use Anterior and Următor to go to the previous or the next period.
+  - The necessity filter also finds an expense that has an item at that level. Below the expense, the page shows the lines at that level. The total counts only these lines.
 - **Evaluare (Review)**: rate the unrated expenses one at a time. Use these keys:
   - `1` to `4` set the necessity level.
   - `c` sets or clears the cheaper option mark.
@@ -90,7 +93,27 @@ Send one expense in each message, in Romanian or in English. These are some exam
 - `am condus 42 km până la Cluj`
 - `chirie 2500 esențial, lunar`
 
-The bot replies with the saved entry. It also accepts these commands:
+The bot replies with the saved entry.
+
+### Receipt photos
+
+Send a photo of a receipt to the bot. Send one receipt in each photo. The model reads the receipt and the bot saves one expense:
+
+- The amount is the total of the receipt.
+- The date is the date on the receipt. If the model cannot read a date, the bot uses the date of the message.
+- The description is the name of the store, for example `Lidl`.
+- Each article on the receipt becomes an item of the expense, with the amount of its line. A receipt with one article also gets one item.
+- The model selects the category from the store and the articles. If the category is not clear, the model selects Necategorisit (Uncategorized). You can change the categories later in the app.
+
+You can add a caption to the photo, for example `ieri` or `esențial`. The caption has priority over the receipt.
+
+If the items do not add up to the total, the bot shows the difference as Nespecificat (Unspecified). If the items are more than the total, the bot saves only the total and tells you. Make sure that the total in the reply is correct.
+
+Send the receipt as a photo, not as a file. The bot accepts a file only in JPEG, PNG or WebP format and only up to 3.75 MB.
+
+### Commands
+
+The bot accepts these commands:
 
 | Command | Result |
 | --- | --- |
@@ -102,10 +125,18 @@ The bot replies with the saved entry. It also accepts these commands:
 
 The computer must be awake to process the messages. Telegram keeps the unread messages for 24 hours.
 
+### Test the parser
+
 To test the parser before you set up the bot, run this command:
 
 ```
 uv run python -m spendtrack.bot.try_parse "coffee 18,50" "groceries 210, of which wine 50"
+```
+
+To test a receipt photo, give the file after `--image`. A caption is optional:
+
+```
+uv run python -m spendtrack.bot.try_parse --image receipt.jpg "ieri"
 ```
 
 The command prints the model output and the values that the app will save. It does not save anything.

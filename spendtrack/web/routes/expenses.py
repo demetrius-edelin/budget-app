@@ -1,10 +1,10 @@
-"""The Expenses page: filters, inline edits, items, soft delete with Undo, and CSV export."""
+"""The Expenses page: the period bar, filters, inline edits, items, Undo for deletes, CSV export."""
 
 from __future__ import annotations
 
 import csv
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 from urllib.parse import urlencode
@@ -17,10 +17,20 @@ from spendtrack.core import categories as categories_core
 from spendtrack.core import expenses as core
 from spendtrack.core import metrics as metrics_core
 from spendtrack.core.errors import SpendtrackError
-from spendtrack.core.expenses import ItemInput, necessity_name
+from spendtrack.core.expenses import ItemInput, Line, necessity_name
 from spendtrack.core.money import parse_amount, parse_optional_amount, to_decimal
+from spendtrack.core.periods import (
+    KINDS,
+    Period,
+    match_period,
+    next_period,
+    period_for,
+    period_label,
+    previous_period,
+)
+from spendtrack.db.models import Expense
 from spendtrack.web import forms
-from spendtrack.web.app import DbDep, render
+from spendtrack.web.app import DbDep, render, today_for
 
 router = APIRouter()
 
@@ -39,15 +49,23 @@ class Filters:
 
     @classmethod
     def from_params(cls, params: dict[str, str]) -> Filters:
+        """Read the filters. A 'date' with a 'kind' sets the start and the end to that period."""
         necessity_text = forms.text(params, "necessity")
         necessity: int | str | None = None
         if necessity_text == "unrated":
             necessity = "unrated"
         elif necessity_text:
             necessity = forms.parse_necessity(necessity_text)
+        start = forms.parse_optional_date(params.get("start"), "data de început")
+        end = forms.parse_optional_date(params.get("end"), "data de sfârșit")
+        day = forms.parse_optional_date(params.get("date"))
+        if day is not None:
+            kind = params.get("kind")
+            period = period_for(kind if kind in KINDS else "day", day)
+            start, end = period.start, period.end
         return cls(
-            start=forms.parse_optional_date(params.get("start"), "data de început"),
-            end=forms.parse_optional_date(params.get("end"), "data de sfârșit"),
+            start=start,
+            end=end,
             category_id=forms.parse_optional_int(params.get("category_id"), "categoria"),
             necessity=necessity,
             cheaper=forms.parse_optional_bool(params.get("cheaper")),
@@ -70,6 +88,18 @@ class Filters:
     def query_string(self) -> str:
         return urlencode({k: v for k, v in self.as_dict().items() if v})
 
+    def url(self, start: date | None, end: date | None) -> str:
+        """Return the URL of the Expenses page with these filters and another date range."""
+        query = replace(self, start=start, end=end).query_string()
+        return f"/expenses?{query}" if query else "/expenses"
+
+    def matching_lines(self, expense: Expense) -> list[Line] | None:
+        """Return the lines at the necessity of the filter. Return None without that filter."""
+        if self.necessity is None:
+            return None
+        level = self.necessity if isinstance(self.necessity, int) else None
+        return core.lines_with_necessity(expense, level)
+
     def apply(self, db: Session, *, limit: int | None = LIST_LIMIT) -> list[Any]:
         return core.list_expenses(
             db,
@@ -89,10 +119,68 @@ def _amount(minor: int | None) -> str:
     return "" if minor is None else f"{to_decimal(minor):.2f}"
 
 
-def _view_totals(db: Session, filters: Filters) -> dict[str, int]:
+def _view_totals(db: Session, filters: Filters) -> dict[str, Any]:
+    """Return the total of the view. With a necessity filter, count only the lines at that level."""
     expenses = filters.apply(db, limit=None)
-    counted = [e for e in expenses if not e.informational]
-    return {"total": sum(e.amount_minor for e in counted), "count": len(expenses)}
+    total = 0
+    for expense in expenses:
+        if expense.informational:
+            continue
+        lines = filters.matching_lines(expense)
+        total += expense.amount_minor if lines is None else sum(line.amount_minor for line in lines)
+    level = None
+    if filters.necessity is not None:
+        level = necessity_name(filters.necessity if isinstance(filters.necessity, int) else None)
+    return {"total": total, "count": len(expenses), "level": level}
+
+
+def _partial_match(filters: Filters, expense: Expense) -> list[Line] | None:
+    """Return the matching lines when only a part of the expense matches the necessity filter."""
+    lines = filters.matching_lines(expense)
+    if lines is None or sum(line.amount_minor for line in lines) >= expense.amount_minor:
+        return None
+    return lines
+
+
+def _anchor(filters: Filters, today: date) -> date:
+    """Return the day for the Zi, Săptămână and Lună buttons: today, if the date range holds it."""
+    start, end = filters.start, filters.end
+    if (start is None or start <= today) and (end is None or today <= end):
+        return today
+    return start or end or today
+
+
+def _period_nav(filters: Filters, today: date) -> dict[str, Any]:
+    """Return the period bar: Toate, Zi, Săptămână, Lună, Anterior, the date, Următor and Azi.
+
+    The active period comes from the start and the end of the filters.
+    """
+    period: Period | None = None
+    if filters.start is not None and filters.end is not None:
+        period = match_period(filters.start, filters.end)
+    anchor = _anchor(filters, today)
+
+    def url(span: Period) -> str:
+        return filters.url(span.start, span.end)
+
+    active = period.kind if period else None
+    if filters.start is None and filters.end is None:
+        active = "all"
+    buttons = [("all", "Toate", filters.url(None, None))]
+    for kind, label in (("day", "Zi"), ("week", "Săptămână"), ("month", "Lună")):
+        buttons.append((kind, label, url(period_for(kind, anchor))))
+    following = next_period(period) if period else None
+    return {
+        "active": active,
+        "buttons": buttons,
+        "label": period_label(period) if period else None,
+        "anchor": anchor if period else None,
+        "kind": period.kind if period else "day",
+        "previous": url(previous_period(period)) if period else None,
+        "next": url(following) if following and following.start <= today else None,
+        "today": url(period_for(period.kind if period else "day", today)),
+        "hidden": {k: v for k, v in filters.as_dict().items() if v and k not in ("start", "end")},
+    }
 
 
 def _block_context(
@@ -113,6 +201,7 @@ def _block_context(
     entry = metrics_core.entry_for_expense(db, expense)
     return {
         "expense": expense,
+        "match_lines": _partial_match(filters, expense),
         "expanded": expanded or editing_item_id is not None,
         "mode": mode,
         "editing_item_id": editing_item_id,
@@ -138,12 +227,15 @@ def expenses_page(request: Request, db: Session = DbDep) -> Response:
         filters = Filters()
         error = str(exc)
     expenses = filters.apply(db)
+    matches = {expense.id: _partial_match(filters, expense) for expense in expenses}
     return render(
         request,
         db,
         "expenses.html",
         {
             "expenses": expenses,
+            "matches": matches,
+            "nav": _period_nav(filters, today_for(request)),
             "filters": filters.as_dict(),
             "query_string": filters.query_string(),
             "totals": _view_totals(db, filters),
@@ -157,7 +249,10 @@ def expenses_page(request: Request, db: Session = DbDep) -> Response:
 
 @router.get("/expenses/export.csv")
 def export_csv(request: Request, db: Session = DbDep, mode: str = "expenses") -> Response:
-    """Export the filtered view: one row per expense, or one row per breakdown line."""
+    """Export the filtered view: one row per expense, or one row per breakdown line.
+
+    With a necessity filter, the line export has only the lines at that level.
+    """
     filters = Filters.from_params(dict(request.query_params))
     expenses = filters.apply(db, limit=None)
     buffer = io.StringIO()
@@ -182,7 +277,8 @@ def export_csv(request: Request, db: Session = DbDep, mode: str = "expenses") ->
             ]
         )
         for expense in expenses:
-            for line in core.expense_lines(expense):
+            lines = filters.matching_lines(expense)
+            for line in core.expense_lines(expense) if lines is None else lines:
                 writer.writerow(
                     [
                         line.expense_id,

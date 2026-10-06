@@ -50,6 +50,7 @@ tr.row-items > td { background: #fafbfd; padding: 10px 16px 14px; }
 tr.row-deleted td { color: var(--muted); background: #fbf3f2; }
 tr.row-edit td { background: #f4f7fd; }
 tr.remainder td { color: var(--muted); font-style: italic; }
+tr.row-match td { font-size: 0.9rem; padding-top: 3px; padding-bottom: 3px; background: #fafbfd; }
 table.items { margin-bottom: 8px; }
 form.stacked { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 form.stacked > label, form.stacked > .row, form.stacked > details, form.stacked > .preview, form.stacked > .flags, form.stacked > .cheaper-fields { align-self: stretch; }

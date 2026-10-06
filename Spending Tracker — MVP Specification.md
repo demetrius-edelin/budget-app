@@ -40,7 +40,7 @@ Not in the MVP:
 - A hand-written text grammar. The Telegram channel parses messages with a model instead.
 - Income, accounts, balances and per-category budgets. One optional monthly target only.
 - Multiple currencies, users or vehicles. The currency field exists, but the app uses only RON.
-- Bank imports, receipt photos and scheduled digests.
+- Bank imports and scheduled digests.
 - Multi-currency entry. The EUR figures on the Overview are a display conversion only.
 - A native desktop window. The app runs in the browser.
 
@@ -432,6 +432,27 @@ The setting `AI_PROVIDER` selects the model provider. `AI_MODEL` names the model
 
 All three providers share the same prompt, schema and mapping. The model never touches the database.
 
+### Receipt photos
+
+The owner can send a photo of a receipt instead of a text. The bot downloads the photo from Telegram and sends it to the model with the caption, the message date and the category list. The prompt, the schema and the core functions stay the same.
+
+1. The amount is the final total of the receipt. The subtotal, the payment lines and the change are not the amount.
+2. The date is the date on the receipt. If the model cannot read a date, the date of the message applies. A date in the caption has priority.
+3. The description is the short store name, for example "Lidl".
+4. Each article line becomes one item with the line total. A receipt with one article also gets one item. A discount lowers the article above it.
+5. The model selects the category from the store and the articles, or Uncategorized. If an article clearly belongs to another category, its item gets that category.
+6. The necessity level, the cheaper option and the recurring flag come only from the caption.
+
+These rules apply to a photo:
+
+- The items of a photo are a reading of the model. If they break a rule, for example items above the total or a zero amount, the bot saves the total without the items. The reply then tells the owner to add the items in the app. A text message keeps the strict rule: the bot saves nothing.
+- If the items are less than the total, the remainder shows as Unspecified, as for a text message.
+- The bot accepts a Telegram photo, or an image file of type JPEG, PNG or WebP. The limit is 3.75 MB, because the Claude API accepts 5 MB of base64 text per image. The bot rejects other files with a reply, before the model call.
+- A download failure with HTTP status 4xx gets an error reply. Any other download failure raises, so the next poll delivers the update again.
+- The app does not store the photo. The `text` field of the `inbound_message` row holds the caption.
+- If the items and the remainder make more than three lines, the reply shows one line per item.
+- The OpenAI providers get the photo at high detail.
+
 ### Rules
 
 - The bot answers only the Telegram user ids in `ALLOWED_TELEGRAM_USER_IDS`. Any other sender gets no reply. The app logs the sender id, so the owner can find the own id at the first setup.
@@ -464,7 +485,7 @@ All three providers share the same prompt, schema and mapping. The model never t
 | tg_chat_id, tg_message_id | integer | Indexed as a pair. An edit repeats the pair |
 | sender_id | integer | |
 | sent_at | timestamp | The message date from Telegram |
-| text | text, nullable | The message as sent |
+| text | text, nullable | The message as sent, or the caption of a photo |
 | status | text | saved, question, command, rejected, unauthorized, error |
 | error | text, nullable | |
 | expense_id | FK expense, nullable | |
@@ -490,6 +511,11 @@ All three providers share the same prompt, schema and mapping. The model never t
 | T12 | The write fails three times | The update is skipped and logged |
 | T13 | A second connection writes during the model call | The write succeeds |
 | T10 | `/today`, `/last`, `/undo`, `/restore` | The replies above |
+| T14 | A photo, model output: Lidl 28,43 with four items | One expense with four items, one line per item in the reply |
+| T15 | A photo with the caption "esențial" | The parser gets the caption. The level is Esențial |
+| T16 | A photo, model output with items above the total | The bot saves the total without items. The reply tells the owner to add the items in the app |
+| T17 | An image file of type HEIC, or a file above 3.75 MB | A rejection reply, no model call |
+| T18 | The photo download fails with HTTP 400, then with a timeout | An error reply, then a raise and a new delivery of the update |
 
 ## 12. Build order and later work
 
@@ -505,5 +531,5 @@ Later, outside the MVP:
 - Email as a second input channel.
 - Automatic necessity suggestions with a decision model, applied when the confidence is high.
 - Scheduled weekly and monthly digests.
-- Receipt photos, bank CSV import, per-category budgets and more metric types.
+- Bank CSV import, per-category budgets and more metric types.
 - A native window with pywebview, if a browser tab is not enough.

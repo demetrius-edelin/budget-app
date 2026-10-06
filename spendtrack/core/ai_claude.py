@@ -11,7 +11,9 @@ import anthropic
 from spendtrack.core.ai_parse import (
     DEFAULT_EFFORT,
     DEFAULT_MODEL,
+    MAX_OUTPUT_TOKENS,
     SYSTEM_PROMPT,
+    ImageInput,
     ParsedEntry,
     ParseError,
     build_user_message,
@@ -29,6 +31,17 @@ def output_config_for(effort: str) -> dict[str, str] | None:
     return {"effort": _EFFORT_MAP.get(effort, effort)}
 
 
+def user_content(
+    text: str, message_date: date, categories: list[str], image: ImageInput | None
+) -> str | list[dict[str, Any]]:
+    """Build the user turn. A photo goes before the text."""
+    message = build_user_message(text, message_date, categories, has_image=image is not None)
+    if image is None:
+        return message
+    source = {"type": "base64", "media_type": image.media_type, "data": image.base64()}
+    return [{"type": "image", "source": source}, {"type": "text", "text": message}]
+
+
 class ClaudeParser:
     """Parse messages with the Claude API. The client reads ANTHROPIC_API_KEY from the env."""
 
@@ -42,7 +55,14 @@ class ClaudeParser:
         self.effort = effort
         self.client = client or anthropic.Anthropic()
 
-    def parse(self, text: str, *, message_date: date, categories: list[str]) -> ParsedEntry:
+    def parse(
+        self,
+        text: str,
+        *,
+        message_date: date,
+        categories: list[str],
+        image: ImageInput | None = None,
+    ) -> ParsedEntry:
         extra: dict[str, Any] = {}
         output_config = output_config_for(self.effort)
         if output_config is not None:
@@ -50,12 +70,15 @@ class ClaudeParser:
         try:
             response = self.client.messages.parse(
                 model=self.model,
-                max_tokens=4096,
+                max_tokens=MAX_OUTPUT_TOKENS,
                 system=SYSTEM_PROMPT,
                 output_format=ParsedEntry,
                 **extra,
                 messages=[
-                    {"role": "user", "content": build_user_message(text, message_date, categories)}
+                    {
+                        "role": "user",
+                        "content": user_content(text, message_date, categories, image),
+                    }
                 ],
             )
         except anthropic.RateLimitError as exc:

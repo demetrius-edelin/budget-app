@@ -112,6 +112,81 @@ def test_expenses_search_updates_the_results_as_you_type(client: TestClient) -> 
     assert "în 1 cheltuială" in results
 
 
+def test_expenses_period_bar_moves_by_period_and_keeps_the_filters(client: TestClient) -> None:
+    groceries = _groceries_id(client)
+    page = client.get(f"/expenses?start=2026-08-10&end=2026-08-16&category_id={groceries}")
+    text = page.text
+    nav = text[text.index('id="period-nav"') : text.index('id="filters"')]
+    keep = f"&amp;category_id={groceries}"
+    assert f'class="seg-btn on" href="/expenses?start=2026-08-10&amp;end=2026-08-16{keep}"' in nav
+    assert f'href="/expenses?start=2026-08-03&amp;end=2026-08-09{keep}">← Anterior' in nav
+    assert f'href="/expenses?start=2026-08-17&amp;end=2026-08-23{keep}">Următor →' in nav
+    assert f'href="/expenses?start=2026-08-01&amp;end=2026-08-31{keep}">Lună' in nav
+    assert f'href="/expenses?category_id={groceries}">Toate' in nav
+    assert '<input type="hidden" name="kind" value="week">' in nav
+    assert f'<input type="hidden" name="category_id" value="{groceries}">' in nav
+    assert "Săptămâna 10–16 aug 2026" in text
+    assert 'hx-select-oob="#period-nav"' in text
+
+    picked = client.get("/expenses?kind=month&date=2026-08-15").text
+    assert "august 2026" in picked
+    assert 'name="start" value="2026-08-01"' in picked and 'name="end" value="2026-08-31"' in picked
+
+    day = client.get("/expenses?start=2026-09-12&end=2026-09-12").text
+    assert '<a class="seg-btn on" href="/expenses?start=2026-09-12&amp;end=2026-09-12">Zi' in day
+
+    everything = client.get("/expenses").text
+    assert '<a class="seg-btn on" href="/expenses">Toate' in everything
+    assert "← Anterior" not in everything
+
+
+def test_necessity_filter_shows_the_items_at_that_level(client: TestClient) -> None:
+    groceries = _groceries_id(client)
+    with _db(client) as db:
+        market = expenses_core.create_expense(
+            db,
+            occurred_on=date(2026, 10, 3),
+            amount_minor=13800,
+            category_id=groceries,
+            description="Mega",
+            necessity=3,
+        )
+        expenses_core.add_items(
+            db, market.id, [expenses_core.ItemInput("Ciocolată", 1500, necessity=4)]
+        )
+        expenses_core.create_expense(
+            db,
+            occurred_on=date(2026, 10, 3),
+            amount_minor=2000,
+            category_id=groceries,
+            description="Pâine",
+            necessity=1,
+        )
+        db.commit()
+        market_id = market.id
+
+    impulse = client.get("/expenses?necessity=4").text
+    results = impulse[impulse.index('id="results"') :]
+    assert "Mega" in results and "Pâine" not in results
+    assert 'class="row-match"' in results and "Ciocolată" in results
+    assert "<strong>15,00 RON</strong>" in results and "Impuls în 1 cheltuială" in results
+
+    useful = client.get("/expenses?necessity=3").text
+    results = useful[useful.index('id="results"') :]
+    assert "Nespecificat" in results and "<strong>123,00 RON</strong>" in results
+
+    essential = client.get("/expenses?necessity=1").text
+    assert 'class="row-match"' not in essential  # the whole expense matches
+
+    closed = client.get(f"/expenses/{market_id}/row?expanded=0&necessity=4")
+    assert 'class="row-match"' in closed.text and "Impuls în 1 cheltuială" in closed.text
+    opened = client.get(f"/expenses/{market_id}/row?expanded=1&necessity=4")
+    assert 'class="row-match"' not in opened.text
+
+    lines = client.get("/expenses/export.csv?mode=lines&necessity=4").text.strip().splitlines()
+    assert len(lines) == 2 and "Ciocolată,15.00" in lines[1]
+
+
 def test_add_expense_rejects_thousands_separators(client: TestClient) -> None:
     response = client.post(
         "/add/expense",

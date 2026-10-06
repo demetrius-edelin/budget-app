@@ -63,6 +63,15 @@ def period_for(kind: str, anchor: date) -> Period:
     raise ValueError(f"Unknown period kind: {kind!r}")
 
 
+def match_period(start: date, end: date) -> Period | None:
+    """Return the day, week or month that starts and ends on these dates, or None."""
+    for kind in KINDS:
+        period = period_for(kind, start)
+        if period.start == start and period.end == end:
+            return period
+    return None
+
+
 def previous_period(period: Period) -> Period:
     """Return the period of the same kind that ends right before this one."""
     return period_for(period.kind, period.start - timedelta(days=1))

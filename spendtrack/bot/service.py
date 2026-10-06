@@ -1,4 +1,4 @@
-"""The bot service: poll Telegram, parse each message, save through the core, reply.
+"""The bot service: poll Telegram, parse each message or receipt photo, save, reply.
 
 The model call runs with no database transaction open, so the web app can write
 in the meantime. Every update becomes one inbound_message row that also stores
@@ -24,7 +24,16 @@ from spendtrack.core import expenses as expenses_core
 from spendtrack.core import metrics as metrics_core
 from spendtrack.core import reports
 from spendtrack.core import settings as settings_core
-from spendtrack.core.ai_parse import Draft, ParsedEntry, ParseError, Parser, draft_from_entry
+from spendtrack.core.ai_parse import (
+    IMAGE_MEDIA_TYPES,
+    MAX_IMAGE_BYTES,
+    Draft,
+    ImageInput,
+    ParsedEntry,
+    ParseError,
+    Parser,
+    draft_from_entry,
+)
 from spendtrack.core.errors import SpendtrackError
 from spendtrack.core.expenses import UNSPECIFIED_NAME, necessity_name
 from spendtrack.core.money import format_minor
@@ -40,6 +49,9 @@ HELP_TEXT = """Trimite o cheltuială pe mesaj, cu cuvintele tale:
   taxi ieri 35, puteam lua autobuzul
   am condus 42 km până la Cluj
   chirie 2500 esențial, lunar
+
+Sau trimite o fotografie a bonului. Totalul devine cheltuiala, iar produsele devin articole.
+Poți adăuga o descriere la fotografie, de exemplu: ieri, esențial.
 
 Comenzi: /today /week /month /last [n] /undo /restore <id> /help"""
 
@@ -73,14 +85,24 @@ def split_message(text: str, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """A photo, or an image sent as a file. The media type is None for a type the bot rejects."""
+
+    file_id: str
+    media_type: str | None
+    file_size: int | None
+
+
+@dataclass(frozen=True)
 class Incoming:
     update_id: int
     chat_id: int
     message_id: int
     sender_id: int
     sent_at: datetime
-    text: str | None
+    text: str | None  # the text, or the caption of a photo
     edited: bool
+    attachment: Attachment | None = None
 
 
 @dataclass(frozen=True)
@@ -91,6 +113,21 @@ class Prepared:
     reply: str | None = None
     entry: ParsedEntry | None = None
     error: str | None = None
+
+
+def _attachment(message: dict[str, Any]) -> Attachment | None:
+    """Read the photo of a message. Return None for a message without an image."""
+    photos = message.get("photo")
+    if isinstance(photos, list) and photos:
+        # Telegram lists the sizes of a photo from small to large. All of them are JPEG.
+        fitting = [p for p in photos if (p.get("file_size") or 0) <= MAX_IMAGE_BYTES]
+        largest = (fitting or photos)[-1]
+        return Attachment(str(largest["file_id"]), "image/jpeg", largest.get("file_size"))
+    document = message.get("document")
+    if isinstance(document, dict) and str(document.get("mime_type", "")).startswith("image/"):
+        media_type = document["mime_type"] if document["mime_type"] in IMAGE_MEDIA_TYPES else None
+        return Attachment(str(document["file_id"]), media_type, document.get("file_size"))
+    return None
 
 
 def parse_update(raw: dict[str, Any]) -> Incoming | None:
@@ -111,8 +148,9 @@ def parse_update(raw: dict[str, Any]) -> Incoming | None:
             message_id=int(message["message_id"]),
             sender_id=int(sender.get("id", 0)),
             sent_at=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
-            text=message.get("text"),
+            text=message.get("text") or message.get("caption"),
             edited=edited,
+            attachment=_attachment(message),
         )
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
@@ -305,13 +343,25 @@ class BotService:
                 "rejected",
                 "Editările nu se aplică. Trimite intrarea din nou sau modific-o în aplicație.",
             )
-        if not text:
-            return Prepared("rejected", "Trimite un mesaj text cu o sumă, de exemplu: cafea 18,50")
-        if text.startswith("/"):
+        image: ImageInput | None = None
+        if incoming.attachment is not None:
+            loaded = self._load_image(incoming.attachment)
+            if isinstance(loaded, Prepared):
+                return loaded
+            image = loaded
+        elif not text:
+            return Prepared(
+                "rejected",
+                "Trimite un mesaj text cu o sumă, de exemplu: cafea 18,50,"
+                " sau o fotografie a bonului.",
+            )
+        elif text.startswith("/"):
             return Prepared("command")
         message_date = incoming.sent_at.astimezone(self.config.tz).date()
         try:
-            entry = self.parser.parse(text, message_date=message_date, categories=names)
+            entry = self.parser.parse(
+                text, message_date=message_date, categories=names, image=image
+            )
         except ParseError as exc:
             return Prepared("error", f"Nesalvat: {exc}", error=str(exc))
         except Exception as exc:  # noqa: BLE001
@@ -323,6 +373,33 @@ class BotService:
             question = entry.question or "Trimite suma și câteva cuvinte."
             return Prepared("question", question, entry=entry)
         return Prepared("entry", entry=entry)
+
+    def _load_image(self, attachment: Attachment) -> ImageInput | Prepared:
+        """Download a photo for the model. Return a rejection when the bot cannot use it."""
+        too_large = Prepared(
+            "rejected",
+            "Nesalvat: imaginea este prea mare. Trimite bonul ca fotografie, nu ca fișier.",
+        )
+        if attachment.media_type is None:
+            return Prepared(
+                "rejected",
+                "Nesalvat: nu pot citi acest tip de imagine. Trimite bonul ca fotografie.",
+            )
+        if (attachment.file_size or 0) > MAX_IMAGE_BYTES:
+            return too_large
+        try:
+            data = self.api.download_file(attachment.file_id)
+        except TelegramError as exc:
+            if exc.retry_after or exc.status is None or exc.status >= 500:
+                raise  # A temporary failure. The next poll delivers the update again.
+            return Prepared(
+                "error",
+                "Nesalvat: nu pot descărca fotografia. Trimite-o din nou.",
+                error=str(exc),
+            )
+        if len(data) > MAX_IMAGE_BYTES:
+            return too_large
+        return ImageInput(data=data, media_type=attachment.media_type)
 
     def _store(
         self, db: Session, incoming: Incoming, row: InboundMessage, prepared: Prepared
@@ -339,7 +416,10 @@ class BotService:
         message_date = incoming.sent_at.astimezone(self.config.tz).date()
         try:
             draft = draft_from_entry(
-                prepared.entry, categories_core.list_categories(db), message_date
+                prepared.entry,
+                categories_core.list_categories(db),
+                message_date,
+                from_image=incoming.attachment is not None,
             )
             with db.begin_nested():
                 expense = self._save(db, draft)
@@ -354,7 +434,8 @@ class BotService:
             return "Nesalvat (eroare internă). Trimite mesajul din nou."
         row.status = "saved"
         row.expense_id = expense.id
-        return self._confirmation(db, expense)
+        reply = self._confirmation(db, expense)
+        return f"{reply}\n{draft.note}" if draft.note else reply
 
     def _save(self, db: Session, draft: Draft) -> Expense:
         if draft.kind == "drive":
@@ -408,11 +489,12 @@ class BotService:
             lines.append("Doar informativ: modul de cost al combustibilului este chitanțe.")
         items = expense.live_items
         if items:
-            detail = " · ".join(f"{i.description} {self._money(db, i.amount_minor)}" for i in items)
+            details = [f"{i.description} {self._money(db, i.amount_minor)}" for i in items]
             rest = expenses_core.remainder_minor(expense)
             if rest > 0:
-                detail += f" · {UNSPECIFIED_NAME} {self._money(db, rest)}"
-            lines.append(detail)
+                details.append(f"{UNSPECIFIED_NAME} {self._money(db, rest)}")
+            # A short list fits on one line. A receipt gets one line per item.
+            lines.append(" · ".join(details) if len(details) <= 3 else "\n".join(details))
         flags = []
         if expense.necessity is not None:
             flags.append(necessity_name(expense.necessity))

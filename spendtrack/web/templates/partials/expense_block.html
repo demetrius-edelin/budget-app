@@ -53,6 +53,19 @@
       <button class="link danger" hx-post="/expenses/{{ eid }}/delete" {{ target|safe }}>Șterge</button>
     </td>
   </tr>
+  {% if match_lines and not expanded %}
+  {% for line in match_lines %}
+  <tr class="row-match">
+    <td></td>
+    <td>{{ line.category_name }}</td>
+    <td><span class="muted">↳</span> {{ line.description }}</td>
+    <td class="num">{{ line.amount_minor|money(nf) }}</td>
+    <td><span class="dot l{{ line.necessity if line.necessity else 'u' }}"></span> {{ line.necessity_name }}</td>
+    <td>{% if line.cheaper_alt %}<span class="tag warn">mai ieftin{% if line.cheaper_alt_minor is not none %} {{ line.cheaper_alt_minor|money(nf) }}{% endif %}</span>{% endif %}</td>
+    <td></td>
+  </tr>
+  {% endfor %}
+  {% endif %}
   {% if expanded %}
   <tr class="row-items"><td colspan="7">
     {% set calc = calculation if calculation else (calculations[eid] if calculations is defined and eid in calculations else none) %}

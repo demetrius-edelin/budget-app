@@ -4,9 +4,25 @@
 {% block content %}
 <h1>Cheltuieli</h1>
 
+<div id="period-nav" class="filters">
+  <div class="seg">
+    {% for key, label, href in nav.buttons %}
+    <a class="seg-btn {{ 'on' if nav.active == key }}" href="{{ href }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if nav.previous %}<a class="button" href="{{ nav.previous }}">← Anterior</a>{% endif %}
+  <form method="get" action="/expenses">
+    {% for name, value in nav.hidden.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <input type="hidden" name="kind" value="{{ nav.kind }}">
+    <label>Dată <input type="date" name="date" value="{{ nav.anchor|iso }}" onchange="this.form.submit()"></label>
+  </form>
+  {% if nav.next %}<a class="button" href="{{ nav.next }}">Următor →</a>{% endif %}
+  <a class="button" href="{{ nav.today }}">Azi</a>
+</div>
+
 <form id="filters" method="get" action="/expenses" class="filters"
       hx-get="/expenses" hx-trigger="input delay:300ms, submit" hx-sync="this:replace"
-      hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-replace-url="true">
+      hx-target="#results" hx-select="#results" hx-select-oob="#period-nav" hx-swap="outerHTML" hx-replace-url="true">
   <label>De la <input type="date" name="start" value="{{ filters.start }}"></label>
   <label>Până la <input type="date" name="end" value="{{ filters.end }}"></label>
   <label>Categorie {{ category_select('category_id', filters.category_id, categories, empty_label='Toate') }}</label>
@@ -27,6 +43,7 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 <div class="toolbar">
+  {% if nav.label %}<span class="strong">{{ nav.label }}</span>{% endif %}
   {% include "partials/view_total.html" %}
   <span class="spacer"></span>
   <a class="button" href="/expenses/export.csv?mode=expenses&{{ query_string }}">Exportă cheltuielile (CSV)</a>
@@ -39,7 +56,7 @@
 <table class="expenses">
   <thead><tr><th>Dată</th><th>Categorie</th><th>Descriere</th><th class="num">Sumă</th><th>Necesitate</th><th>Marcaje</th><th></th></tr></thead>
   {% for expense in expenses %}
-    {% with expanded=false, mode='view', editing_item_id=none, error=none, calculation=none %}
+    {% with expanded=false, mode='view', editing_item_id=none, error=none, calculation=none, match_lines=matches[expense.id] %}
     {% include "partials/expense_block.html" %}
     {% endwith %}
   {% else %}

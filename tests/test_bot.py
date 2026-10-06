@@ -13,12 +13,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from spendtrack.bot.service import BotService, parse_update, split_message
+from spendtrack.bot.service import Attachment, BotService, parse_update, split_message
 from spendtrack.bot.telegram_api import TelegramError
 from spendtrack.config import Config
 from spendtrack.core import expenses as expenses_core
 from spendtrack.core import metrics
-from spendtrack.core.ai_parse import ParsedEntry, ParsedItem, ParseError
+from spendtrack.core.ai_parse import ImageInput, ParsedEntry, ParsedItem, ParseError
 from spendtrack.db.models import Base, InboundMessage
 from spendtrack.db.seed import seed
 from spendtrack.db.session import make_engine, make_session_factory
@@ -37,6 +37,8 @@ class FakeApi:
         self.sent: list[tuple[int, str, int | None]] = []
         self.fail_sends = 0  # the next n sends raise
         self.rate_limit_once = False
+        self.files: dict[str, bytes | Exception] = {}
+        self.downloads: list[str] = []
 
     def get_updates(self, offset: int | None, timeout: int) -> list[dict[str, Any]]:
         updates = [u for u in self.pending if offset is None or u["update_id"] >= offset]
@@ -53,14 +55,30 @@ class FakeApi:
             raise TelegramError("sendMessage failed with HTTP 400: message is too long", status=400)
         self.sent.append((chat_id, text, reply_to_message_id))
 
+    def download_file(self, file_id: str) -> bytes:
+        self.downloads.append(file_id)
+        data = self.files[file_id]
+        if isinstance(data, Exception):
+            raise data
+        return data
+
 
 class FakeParser:
     def __init__(self) -> None:
         self.answers: dict[str, ParsedEntry | Exception] = {}
         self.calls: list[tuple[str, date, list[str]]] = []
+        self.images: list[ImageInput | None] = []
 
-    def parse(self, text: str, *, message_date: date, categories: list[str]) -> ParsedEntry:
+    def parse(
+        self,
+        text: str,
+        *,
+        message_date: date,
+        categories: list[str],
+        image: ImageInput | None = None,
+    ) -> ParsedEntry:
         self.calls.append((text, message_date, categories))
+        self.images.append(image)
         answer = self.answers[text]
         if isinstance(answer, Exception):
             raise answer
@@ -79,6 +97,24 @@ def update(text: str, update_id: int = 1, sender: int = OWNER, edited: bool = Fa
             "text": text,
         },
     }
+
+
+def photo_update(caption: str | None = None, update_id: int = 1, **message: Any) -> dict:
+    """A photo message. Telegram lists the sizes from small to large."""
+    raw = update("", update_id)
+    del raw["message"]["text"]
+    if caption is not None:
+        raw["message"]["caption"] = caption
+    raw["message"].update(
+        message
+        or {
+            "photo": [
+                {"file_id": "small", "file_size": 2_000},
+                {"file_id": "large", "file_size": 300_000},
+            ]
+        }
+    )
+    return raw
 
 
 def _make_bot(db_url: str, tmp_path: Path) -> tuple[BotService, FakeApi, FakeParser, Any]:
@@ -369,7 +405,7 @@ def test_model_call_holds_no_write_lock(tmp_path: Path) -> None:
     service, api, parser, engine = _make_bot(f"sqlite:///{db_path}", tmp_path)
 
     class WritingParser(FakeParser):
-        def parse(self, text, *, message_date, categories):
+        def parse(self, text, *, message_date, categories, image=None):
             other = sqlite3.connect(db_path, timeout=0.5)
             try:
                 other.execute("INSERT INTO setting (key, value) VALUES ('probe', '1')")
@@ -444,3 +480,109 @@ def test_pending_reply_is_not_sent_to_a_removed_sender(bot) -> None:
     service.config = replace(service.config, allowed_telegram_user_ids=frozenset())
     assert service.process_update(update("coffee 18,50")) is None
     assert api.sent == []
+
+
+# ---- receipt photos ----
+
+LIDL = ParsedEntry(
+    kind="expense",
+    occurred_on="2026-09-28",
+    amount="28.43",
+    category="Alimente",
+    description="Lidl",
+    items=[
+        ParsedItem(description="Branza de vaci cu sm", amount="21.99"),
+        ParsedItem(description="Sacosa maiou", amount="0.81"),
+        ParsedItem(description="Ecotaxa/Cost DEEE", amount="0.18"),
+        ParsedItem(description="Varza alba", amount="5.45"),
+    ],
+)
+
+
+def test_parse_update_reads_a_photo_and_its_caption() -> None:
+    incoming = parse_update(photo_update("ieri"))
+    assert incoming is not None and incoming.text == "ieri"
+    assert incoming.attachment == Attachment("large", "image/jpeg", 300_000)
+    huge = photo_update(
+        photo=[{"file_id": "fits", "file_size": 900_000}, {"file_id": "huge", "file_size": 9**8}]
+    )
+    assert parse_update(huge).attachment.file_id == "fits"
+    heic = photo_update(document={"file_id": "d", "mime_type": "image/heic", "file_size": 10})
+    assert parse_update(heic).attachment == Attachment("d", None, 10)
+    pdf = photo_update(document={"file_id": "p", "mime_type": "application/pdf"})
+    assert parse_update(pdf).attachment is None
+    assert parse_update(update("cafea 18")).attachment is None
+
+
+def test_receipt_photo_is_saved_with_one_item_per_article(bot) -> None:
+    service, api, parser = bot
+    api.files["large"] = b"jpeg bytes"
+    parser.answers[""] = LIDL
+    reply = service.process_update(photo_update())
+    assert api.downloads == ["large"]
+    assert parser.images == [ImageInput(b"jpeg bytes", "image/jpeg")]
+    assert reply.startswith("Salvat #1 · Alimente · Lidl · 28,43 RON · lun 28 sep")
+    assert "\nBranza de vaci cu sm 21,99\nSacosa maiou 0,81\nEcotaxa/Cost DEEE 0,18\n" in reply
+    assert "Varza alba 5,45\nNeevaluat" in reply
+    with _db(service) as db:
+        expense = expenses_core.get_expense(db, 1)
+        assert expense.amount_minor == 2843
+        assert len(expense.live_items) == 4
+        assert expenses_core.remainder_minor(expense) == 0
+        row = db.scalar(select(InboundMessage))
+        assert (row.status, row.text) == ("saved", None)
+
+
+def test_photo_caption_goes_to_the_parser(bot) -> None:
+    service, api, parser = bot
+    api.files["large"] = b"jpeg bytes"
+    parser.answers["esențial"] = LIDL.model_copy(update={"necessity": 1})
+    reply = service.process_update(photo_update("esențial"))
+    assert parser.calls[0][0] == "esențial"
+    assert "Esențial" in reply
+
+
+def test_receipt_items_above_the_total_save_the_total_only(bot) -> None:
+    service, api, parser = bot
+    api.files["large"] = b"jpeg bytes"
+    parser.answers[""] = LIDL.model_copy(update={"amount": "25"})
+    reply = service.process_update(photo_update())
+    assert reply.startswith("Salvat #1 · Alimente · Lidl · 25,00 RON")
+    assert reply.endswith(
+        "nu se potrivesc cu totalul, așa că am salvat doar totalul. Adaugă articolele în aplicație."
+    )
+    with _db(service) as db:
+        assert expenses_core.get_expense(db, 1).live_items == []
+
+
+def test_unusable_images_are_rejected_before_the_model(bot) -> None:
+    service, api, parser = bot
+    heic = photo_update(document={"file_id": "d", "mime_type": "image/heic", "file_size": 10})
+    assert service.process_update(heic).startswith("Nesalvat: nu pot citi acest tip de imagine")
+    big = photo_update(
+        update_id=2, document={"file_id": "b", "mime_type": "image/png", "file_size": 9**8}
+    )
+    assert service.process_update(big).startswith("Nesalvat: imaginea este prea mare")
+    api.files["large"] = b"x" * 4_000_000  # the photo grew past the limit after the check
+    assert service.process_update(photo_update(update_id=3)).startswith(
+        "Nesalvat: imaginea este prea mare"
+    )
+    assert parser.calls == [] and api.downloads == ["large"]
+    sticker = photo_update(update_id=4, sticker={"file_id": "s"})
+    assert service.process_update(sticker).startswith("Trimite un mesaj text cu o sumă")
+
+
+def test_download_failures(bot) -> None:
+    service, api, parser = bot
+    api.files["large"] = TelegramError("getFile failed with HTTP 400: file is too big", status=400)
+    reply = service.process_update(photo_update())
+    assert reply == "Nesalvat: nu pot descărca fotografia. Trimite-o din nou."
+    with _db(service) as db:
+        assert db.scalar(select(InboundMessage)).status == "error"
+    # A temporary failure raises, so the next poll delivers the update again.
+    api.files["large"] = TelegramError("File download failed: timed out")
+    with pytest.raises(TelegramError):
+        service.process_update(photo_update(update_id=2))
+    api.files["large"] = b"jpeg bytes"
+    parser.answers[""] = LIDL
+    assert service.process_update(photo_update(update_id=2)).startswith("Salvat #1")

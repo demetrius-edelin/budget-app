@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from spendtrack.core.errors import NotFoundError, ValidationError
@@ -441,6 +441,35 @@ def expense_lines(expense: Expense) -> list[Line]:
     return lines
 
 
+def _has_line_with_necessity(level: int) -> ColumnElement[bool]:
+    """Match an expense that has at least one breakdown line at this level.
+
+    An item line has its own level or the level of the expense. The Unspecified remainder
+    line has the level of the expense, and it exists only when the items do not cover the amount.
+    """
+    live = ExpenseItem.deleted_at.is_(None)
+    covered = (
+        select(func.coalesce(func.sum(ExpenseItem.amount_minor), 0))
+        .where(ExpenseItem.expense_id == Expense.id, live)
+        .scalar_subquery()
+    )
+    return or_(
+        Expense.items.any(and_(live, ExpenseItem.necessity == level)),
+        and_(
+            Expense.necessity == level,
+            or_(
+                Expense.items.any(and_(live, ExpenseItem.necessity.is_(None))),
+                Expense.amount_minor > covered,
+            ),
+        ),
+    )
+
+
+def lines_with_necessity(expense: Expense, level: int | None) -> list[Line]:
+    """Return the breakdown lines at this level. None selects the unrated lines."""
+    return [line for line in expense_lines(expense) if line.necessity == level]
+
+
 def list_expenses(
     session: Session,
     *,
@@ -455,7 +484,11 @@ def list_expenses(
     include_informational: bool = True,
     limit: int | None = None,
 ) -> list[Expense]:
-    """Return expenses, newest first. The necessity filter accepts 1 to 4 or 'unrated'."""
+    """Return expenses, newest first. The necessity filter accepts 1 to 4 or 'unrated'.
+
+    A level from 1 to 4 also matches an expense with an item at that level. 'unrated'
+    matches the expenses that have no level.
+    """
     query = select(Expense).options(selectinload(Expense.items))
     if not include_deleted:
         query = query.where(Expense.deleted_at.is_(None))
@@ -470,7 +503,7 @@ def list_expenses(
     if necessity == "unrated":
         query = query.where(Expense.necessity.is_(None))
     elif isinstance(necessity, int):
-        query = query.where(Expense.necessity == necessity)
+        query = query.where(_has_line_with_necessity(necessity))
     if cheaper is not None:
         query = query.where(Expense.cheaper_alt.is_(cheaper))
     if recurring is not None:

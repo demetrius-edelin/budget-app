@@ -1,4 +1,4 @@
-"""Turn one free-text message into a structured entry with one model call.
+"""Turn one free-text message or one receipt photo into a structured entry with one model call.
 
 This module holds the schema, the prompt and the mapping to core values. The
 provider modules (ai_claude, ai_openai) hold the SDK calls. The model only
@@ -8,6 +8,7 @@ the web forms use, so every rule still applies.
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -27,10 +28,35 @@ from spendtrack.db.models import Category
 from spendtrack.db.seed import FUEL_CATEGORY, UNCATEGORIZED
 
 DEFAULT_MODEL = "claude-opus-5-5"
+MAX_OUTPUT_TOKENS = 16000
+
+# The image types that all three providers accept.
+IMAGE_MEDIA_TYPES = ("image/jpeg", "image/png", "image/webp")
+# The Claude API accepts 5 MB of base64 text per image. That is 3.75 MB of raw bytes.
+MAX_IMAGE_BYTES = 3_750_000
+
+ITEMS_DROPPED_NOTE = (
+    "Articolele citite de pe bon nu se potrivesc cu totalul, așa că am salvat doar totalul."
+    " Adaugă articolele în aplicație."
+)
 
 
 class ParseError(SpendtrackError):
     """The model call failed. The owner must send the message again."""
+
+
+@dataclass(frozen=True)
+class ImageInput:
+    """One photo for the model, for example a receipt."""
+
+    data: bytes
+    media_type: str
+
+    def base64(self) -> str:
+        return base64.standard_b64encode(self.data).decode("ascii")
+
+    def data_url(self) -> str:
+        return f"data:{self.media_type};base64,{self.base64()}"
 
 
 class ParsedItem(BaseModel):
@@ -83,20 +109,44 @@ Rules:
 - cheaper_alt: true when the owner says a cheaper option exists. cheaper_alt_amount when a price is given. cheaper_alt_note: the short reason.
 - recurring: true only when the owner says it repeats: subscription, "abonament", monthly, "lunar".
 - drive: quantity_km as a decimal string. consumption_override (L/100 km) and fuel_price_override (RON per litre) only when the owner gives them.
-- Never invent an amount, a date or an item. When in doubt, ask one short question in Romanian."""
+- Never invent an amount, a date or an item. When in doubt, ask one short question in Romanian.
+
+Receipt photos. When the user turn holds a photo of a receipt ("bon fiscal"), the photo is the entry and the caption only adds to it:
+- kind: "expense". Use "unclear" when the photo is not a receipt, when the total is not readable, or when the receipt is not in RON (lei).
+- amount: the final total paid, the line "TOTAL" or "TOTAL LEI". Not the subtotal, not the cash given ("CASH", "NUMERAR", "CARD") and not the change ("REST").
+- occurred_on: the date printed on the receipt ("DATA"). Romanian receipts print the day first: 06-10-2026 is 2026-10-06. Null when no date is readable. A date in the caption wins over the printed date.
+- description: the short store name, without SRL, SA or the address, for example "Lidl" or "Alexandru Co".
+- category: decide from the store and the articles. Use "Uncategorized" when it is not clear.
+- items: one item for each article line, in the order of the receipt, also when the receipt has only one article. The item amount is the line total (quantity x unit price), not the unit price. Write the article name as printed. Change a name in capitals to normal case with the first letter uppercase, but keep codes such as PN10 as printed. Do not guess the missing letters of a cut name.
+- Bags, eco taxes ("Ecotaxa") and deposits ("garantie SGR") are articles too. Totals, subtotals, VAT ("TVA") lines, payment lines, change and loyalty points are not articles.
+- A discount line ("reducere", "discount", a negative amount) lowers the article above it. Never write an item with a zero or negative amount.
+- The items must add up to the total. If they do not, read the lines again. Leave out a line that you cannot read: the app keeps the difference as unspecified.
+- item category: only when the article clearly belongs to another category than the receipt. Otherwise null. Item necessity: null.
+- necessity, cheaper_alt and recurring come only from the caption."""
 
 
-def build_user_message(text: str, message_date: date, categories: list[str]) -> str:
-    """Build the user turn: the message date, the category list and the message."""
-    return (
+def build_user_message(
+    text: str, message_date: date, categories: list[str], *, has_image: bool = False
+) -> str:
+    """Build the user turn: the message date, the category list and the message or caption."""
+    head = (
         f"Message date: {message_date.isoformat()} ({message_date.strftime('%A')}).\n"
         f"Categories: {', '.join(categories)}.\n\n"
-        f"Message:\n{text.strip()}"
     )
+    if has_image:
+        return head + f"The owner sent the attached photo. Caption:\n{text.strip() or '(none)'}"
+    return head + f"Message:\n{text.strip()}"
 
 
 class Parser(Protocol):
-    def parse(self, text: str, *, message_date: date, categories: list[str]) -> ParsedEntry: ...
+    def parse(
+        self,
+        text: str,
+        *,
+        message_date: date,
+        categories: list[str],
+        image: ImageInput | None = None,
+    ) -> ParsedEntry: ...
 
 
 DEFAULT_EFFORT = "low"
@@ -146,6 +196,7 @@ class Draft:
     quantity: Decimal | None = None
     overrides: dict[str, Decimal] = field(default_factory=dict)
     items: list[ItemInput] = field(default_factory=list)
+    note: str | None = None
 
 
 def _resolve_category(name: str | None, categories: list[Category]) -> Category:
@@ -176,8 +227,14 @@ def _normalize(text: str | None) -> str | None:
     return cleaned or None
 
 
-def draft_from_entry(entry: ParsedEntry, categories: list[Category], message_date: date) -> Draft:
-    """Convert the model output into a Draft. Raise ValidationError for unusable values."""
+def draft_from_entry(
+    entry: ParsedEntry, categories: list[Category], message_date: date, *, from_image: bool = False
+) -> Draft:
+    """Convert the model output into a Draft. Raise ValidationError for unusable values.
+
+    The items of a receipt photo are a reading of the model, not a statement of the
+    owner. If they break a rule, the draft keeps the total without the items and a note.
+    """
     if entry.kind == "unclear":
         raise ValidationError(entry.question or "Trimite suma și câteva cuvinte.")
     active = [c for c in categories if not c.archived] or categories
@@ -215,18 +272,31 @@ def draft_from_entry(entry: ParsedEntry, categories: list[Category], message_dat
     amount_minor = parse_amount(_normalize(entry.amount))
     category = _resolve_category(entry.category, active)
     items: list[ItemInput] = []
-    for item in entry.items:
-        item_category = None
-        if item.category and item.category.strip().lower() != category.name.lower():
-            item_category = _resolve_category(item.category, active).id
-        items.append(
-            ItemInput(
-                description=item.description.strip() or "Articol",
-                amount_minor=parse_amount(_normalize(item.amount)),
-                category_id=item_category,
-                necessity=item.necessity if item.necessity in (1, 2, 3, 4) else None,
+    note: str | None = None
+    try:
+        for item in entry.items:
+            item_category = None
+            if item.category and item.category.strip().lower() != category.name.lower():
+                item_category = _resolve_category(item.category, active).id
+            items.append(
+                ItemInput(
+                    description=item.description.strip() or "Articol",
+                    amount_minor=parse_amount(_normalize(item.amount)),
+                    category_id=item_category,
+                    necessity=item.necessity if item.necessity in (1, 2, 3, 4) else None,
+                )
             )
-        )
+    except ValidationError:
+        if not from_image:
+            raise
+        items, note = [], ITEMS_DROPPED_NOTE
+    if from_image and sum(i.amount_minor for i in items) > amount_minor:
+        items, note = [], ITEMS_DROPPED_NOTE
     return Draft(
-        kind="expense", category_id=category.id, amount_minor=amount_minor, items=items, **common
+        kind="expense",
+        category_id=category.id,
+        amount_minor=amount_minor,
+        items=items,
+        note=note,
+        **common,
     )
