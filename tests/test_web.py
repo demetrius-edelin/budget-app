@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from spendtrack.config import Config
 from spendtrack.core import expenses as expenses_core
 from spendtrack.core import metrics
+from spendtrack.core import settings as settings_core
 from spendtrack.db.models import Base
 from spendtrack.db.seed import seed
 from spendtrack.db.session import make_engine, make_session_factory
@@ -526,3 +527,53 @@ def test_favicon_files_are_served(client: TestClient) -> None:
     assert svg.status_code == 200 and "\U0001f4b0" in svg.text
     page = client.get("/")
     assert 'rel="icon" href="/static/favicon.svg"' in page.text
+
+
+def _today(client: TestClient) -> date:
+    return datetime.now(client.app.state.config.tz).date()
+
+
+def test_overview_extra_income_raises_the_month_target(client: TestClient) -> None:
+    today = _today(client)
+    with _db(client) as db:
+        settings_core.set_monthly_target(db, 300000)
+        db.commit()
+    page = client.get("/")
+    assert "din 3.000,00 RON" in page.text
+    assert 'action="/income"' in page.text
+    added = client.post(
+        "/income",
+        data={"amount": "500", "description": "Bonus", "received_on": today.isoformat()},
+        follow_redirects=True,
+    )
+    assert added.status_code == 200
+    assert "din 3.500,00 RON" in added.text
+    assert "Țintă 3.000,00 + venituri suplimentare 500,00" in added.text
+    assert "Bonus" in added.text
+    income_id = int(re.search(r'action="/income/(\d+)/delete"', added.text).group(1))
+    deleted = client.post(f"/income/{income_id}/delete", follow_redirects=True)
+    assert "Venit șters: Bonus, 500,00 RON." in deleted.text
+    assert f'action="/income/{income_id}/restore"' in deleted.text
+    assert "din 3.000,00 RON" in deleted.text
+    restored = client.post(f"/income/{income_id}/restore", follow_redirects=True)
+    assert "din 3.500,00 RON" in restored.text and "Venit șters" not in restored.text
+    assert client.get(f"/?income_deleted={income_id}").text.count("Venit șters") == 0
+    assert client.get("/?income_deleted=garbage").status_code == 200
+
+
+def test_overview_rejects_bad_extra_income(client: TestClient) -> None:
+    last_month = _today(client).replace(day=1) - timedelta(days=1)
+    outside = client.post(
+        "/income",
+        data={"amount": "500", "description": "Late", "received_on": last_month.isoformat()},
+    )
+    assert outside.status_code == 400
+    assert "Data venitului trebuie să fie în luna curentă." in outside.text
+    assert 'value="Late"' in outside.text
+    zero = client.post("/income", data={"amount": "0", "received_on": ""})
+    assert zero.status_code == 400 and "Suma trebuie să fie mai mare decât zero." in zero.text
+    with _db(client) as db:
+        from spendtrack.db.models import Income
+
+        assert db.query(Income).count() == 0
+    assert client.post("/income/999/delete").status_code == 404

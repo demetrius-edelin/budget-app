@@ -61,15 +61,44 @@
 </article>
 
 <section class="grid2">
-  <article class="card">
+  <article class="card" id="month-target">
     <h2>Luna față de țintă</h2>
-    {% if view.monthly_target_minor %}
+    {% if deleted_income %}
+    <div class="banner row">
+      <span>Venit șters: {{ deleted_income.description or 'fără descriere' }}, {{ deleted_income.amount_minor|money(nf) }} {{ currency }}.</span>
+      <form method="post" action="/income/{{ deleted_income.id }}/restore"><button class="link">Restaurează</button></form>
+    </div>
+    {% endif %}
+    {% if view.month_limit_minor %}
       {% set share = view.target_share_pct or 0 %}
       <div class="bar"><div class="fill {{ 'over' if share > 100 }}" style="width: {{ [share, 100]|min }}%"></div></div>
-      <p>{{ view.month.total_minor|money(nf) }} din {{ view.monthly_target_minor|money(nf) }} {{ currency }} ({{ share }}%)</p>
+      <p>{{ view.month.total_minor|money(nf) }} din {{ view.month_limit_minor|money(nf) }} {{ currency }} ({{ share }}%)</p>
+      {% if view.extra_income_minor %}<p class="muted">Țintă {{ view.monthly_target_minor|money(nf) }} + venituri suplimentare {{ view.extra_income_minor|money(nf) }}</p>{% endif %}
     {% else %}
       <p class="muted">Nicio țintă lunară. Setează una în <a href="/settings">Setări</a>.</p>
     {% endif %}
+    <h3>Venituri suplimentare</h3>
+    {% if view.extra_income %}
+    <table class="compact">
+      {% for income in view.extra_income %}
+      <tr>
+        <td>{{ income.received_on|short_date }}</td>
+        <td>{{ income.description or '' }}</td>
+        <td class="num">{{ income.amount_minor|money(nf) }}</td>
+        <td class="actions"><form method="post" action="/income/{{ income.id }}/delete"><button class="link danger">Șterge</button></form></td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="hint">Un venit suplimentar crește ținta doar pentru luna lui.</p>
+    {% endif %}
+    {% if income_error %}<p class="error">{{ income_error }}</p>{% endif %}
+    <form method="post" action="/income" class="row income-form" autocomplete="off">
+      <label>Sumă ({{ currency }}) <input type="text" name="amount" inputmode="decimal" placeholder="500" value="{{ income_form.amount or '' }}" required></label>
+      <label class="grow">Descriere <input type="text" name="description" placeholder="bonus" value="{{ income_form.description or '' }}"></label>
+      <label>Data <input type="date" name="received_on" value="{{ income_form.received_on or today|iso }}" min="{{ view.month.period.start|iso }}" max="{{ view.month.period.end|iso }}" required></label>
+      <button>Adaugă venit</button>
+    </form>
   </article>
 
   <article class="card">

@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from spendtrack.core import income as income_core
 from spendtrack.core import settings as settings_core
 from spendtrack.core.expenses import (
     DISCRETIONARY_LEVELS,
@@ -21,7 +22,7 @@ from spendtrack.core.expenses import (
     unrated_count,
 )
 from spendtrack.core.periods import Period, period_for, same_span_previous, shift_periods, to_date
-from spendtrack.db.models import Expense
+from spendtrack.db.models import Expense, Income
 
 
 @dataclass(frozen=True)
@@ -260,23 +261,35 @@ class Overview:
     week: PeriodReport
     month: PeriodReport
     monthly_target_minor: int | None
+    extra_income: list[Income]
+    extra_income_minor: int
+    month_limit_minor: int | None
     target_share_pct: float | None
     top_categories: list[Bucket]
     unrated: int
 
 
 def overview(session: Session, today: date) -> Overview:
-    """Build the Overview page figures."""
+    """Build the Overview page figures.
+
+    The limit of the month is the monthly target plus the extra income of the month.
+    """
     day = period_report(session, "day", today, today)
     week = period_report(session, "week", today, today)
     month = period_report(session, "month", today, today)
     target = settings_core.monthly_target_minor(session)
-    share = round(month.total_minor / target * 100, 1) if target else None
+    extra_income = income_core.list_income(session, month.period)
+    extra_minor = sum(income.amount_minor for income in extra_income)
+    limit = target + extra_minor if target else None
+    share = round(month.total_minor / limit * 100, 1) if limit else None
     return Overview(
         day=day,
         week=week,
         month=month,
         monthly_target_minor=target,
+        extra_income=extra_income,
+        extra_income_minor=extra_minor,
+        month_limit_minor=limit,
         target_share_pct=share,
         top_categories=month.by_category[:5],
         unrated=unrated_count(session),

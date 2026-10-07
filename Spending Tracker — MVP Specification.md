@@ -38,7 +38,7 @@ Not in the MVP:
 
 - Email or any other phone channel besides Telegram (see section 11).
 - A hand-written text grammar. The Telegram channel parses messages with a model instead.
-- Income, accounts, balances and per-category budgets. One optional monthly target only.
+- Accounts, balances and per-category budgets. One optional monthly target only. An extra income can raise the target for one month (see section 4, income).
 - Multiple currencies, users or vehicles. The currency field exists, but the app uses only RON.
 - Bank imports and scheduled digests.
 - Multi-currency entry. The EUR figures on the Overview are a display conversion only.
@@ -198,6 +198,20 @@ The metric entry has no `deleted_at`. It follows the soft delete of its expense.
 
 Key-value pairs: `currency`, `number_format`, `monthly_target_minor`, `fuel_cost_mode`, `backup_keep_days`.
 
+### income
+
+An extra income raises the monthly target for the month of the income only. The owner adds it on the Overview page. The Telegram bot cannot add it.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | integer PK | |
+| received_on | date | A date in the current month only. Default: today |
+| amount_minor | integer > 0 | |
+| description | text, nullable | For example "bonus" |
+| created_at, deleted_at | timestamp | |
+
+The limit of a month is `monthly_target_minor` plus the sum of the extra income in that month that is not deleted. With no monthly target, the month has no limit.
+
 ### Totals and breakdown rules
 
 1. A period total is the sum of `amount_minor` over expenses that are not deleted, not informational, and dated in the period. Items never add to totals.
@@ -265,7 +279,7 @@ The app at http://127.0.0.1:8000 is where the owner enters, reviews, edits and a
 
 | Page | Contents |
 | --- | --- |
-| Overview | Today, this week and this month to date, each with the change against the previous period, and each also in EUR at the BNR reference rate (see below). The month against the optional monthly target. The necessity split of the month as a stacked bar. Potential savings this month. Recurring total. Top 5 categories. Count of unrated entries, with a link to Review. A month calendar with the total of each day, with links to the previous months. A click on a day opens Expenses filtered to that day |
+| Overview | Today, this week and this month to date, each with the change against the previous period, and each also in EUR at the BNR reference rate (see below). The month against its limit. The limit is the optional monthly target plus the extra income of the month. A form adds an extra income, and a list shows it with Delete and Undo. The necessity split of the month as a stacked bar. Potential savings this month. Recurring total. Top 5 categories. Count of unrated entries, with a link to Review. A month calendar with the total of each day, with links to the previous months. A click on a day opens Expenses filtered to that day |
 | Add | Two forms, described below. After a save, the page shows a confirmation line with the new #id and keeps the form open for the next entry |
 | Expenses | A table filtered by date range, category, necessity (with unrated), cheaper flag, recurring flag and text search, newest first. Every field is editable inline. An expanded row shows its items and the Unspecified remainder, with add, edit and delete for items. Deletion is soft, with Undo. CSV export of the filtered view: one row per expense, or one row per breakdown line |
 | Review | Unrated expenses and items, one at a time, oldest first. Keys 1 to 4 set the level, c toggles cheaper, r toggles recurring, s skips, arrow keys move |
@@ -399,6 +413,9 @@ Test fixture: today is Tuesday 29 Sep 2026. The seed categories exist. Consumpti
 | 18 | Delete the expense from case 7, then Restore | The metric entry disappears with the expense, then returns with it |
 | 19 | Fuel cost mode `receipts`, then metric form 42 km and expense form Fuel & car 250 | The core saves the drive entry at 25.04 as informational. The day total is 250.00 |
 | 20 | After case 7, set the fuel cost mode to `receipts` | The expense from case 7 still counts in totals |
+| 21 | Monthly target 1,000. Expense 500 on 29 Sep. Extra income 250 on 30 Sep | The month shows 500.00 of 1,250.00 (40%). The Overview on 5 Oct shows the limit 1,000.00 |
+| 22 | Extra income 250 dated 31 Aug, or extra income 0 | Rejected: the date must be in the current month, and the amount must be greater than zero. The core saves nothing |
+| 23 | Delete the extra income from case 21, then Restore | The limit goes to 1,000.00, then back to 1,250.00 |
 
 Dashboard checks:
 

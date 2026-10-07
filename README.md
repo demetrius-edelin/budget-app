@@ -11,7 +11,7 @@ The interface and the Telegram bot use Romanian. Amounts are in Romanian lei (RO
 - **Rate each expense.** Give each expense one of four necessity levels: Esențial (essential), Important, Util (useful) or Impuls (impulse). You can also mark an expense as recurring, or record a cheaper option.
 - **See where you can save.** The reports add the Impuls expenses to the difference between each expense and its cheaper option.
 - **Log a drive in km.** The app calculates the fuel cost from the fuel consumption of your car and the fuel price.
-- **Track a monthly target.** The overview shows your spending for the month against the target.
+- **Track a monthly target.** The overview shows your spending for the month against the target. An extra income, for example a bonus, raises the target for its month only.
 - **See amounts in EUR.** The app converts the totals at the reference rate of the National Bank of Romania (BNR).
 - **Keep your data safe.** The app writes a backup each day. You can export the expenses to CSV (comma-separated values) files.
 
@@ -60,6 +60,9 @@ The Telegram bot is optional. If you use it, the app sends the text and the date
 The navigation bar shows the Romanian page names. The English names are in parentheses.
 
 - **Panou (Overview)**: today, this week and this month, with a month calendar. Click a day to see its expenses. The page also shows the month against your target, the split by necessity level, where you can cut, and the top categories. The three period cards also show the totals in EUR. If the network is not available, the app uses the last downloaded rate.
+  - The card Luna față de țintă (Month against target) has a form to add an extra income. The date must be in the current month. You can delete an extra income with Undo.
+  - The limit of the month is the target plus the extra income of the month. The next month starts again from the target alone.
+  - The Telegram bot cannot add an extra income.
 - **+ (Add)**: enter an expense, or a drive in km. The drive form shows the calculated cost before you save it.
 - **Cheltuieli (Expenses)**: the filters apply while you type. You can edit an expense in the table, add items to an expense, delete with Undo and export to CSV.
   - The period bar shows all expenses, or one day, week or month. Use Anterior and Următor to go to the previous or the next period.

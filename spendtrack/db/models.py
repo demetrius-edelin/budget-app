@@ -217,6 +217,21 @@ class Setting(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class Income(Base):
+    """An extra income. It raises the monthly target for the month of the income only."""
+
+    __tablename__ = "income"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    received_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+    __table_args__ = (CheckConstraint("amount_minor > 0", name="ck_income_amount_positive"),)
+
+
 class InboundMessage(Base):
     """One Telegram update: the audit log of the bot, and the guard against duplicates."""
 

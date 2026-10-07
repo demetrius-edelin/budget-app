@@ -98,6 +98,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 .bar { height: 12px; background: #e8edf5; border-radius: 6px; overflow: hidden; margin: 8px 0; }
 .bar .fill { height: 100%; background: var(--accent); }
 .bar .fill.over { background: var(--danger); }
+.income-form { margin-top: 10px; }
+.income-form input[type=text] { min-width: 90px; }
+.banner.row { align-items: center; padding: 6px 10px; }
 .stack { display: flex; height: 16px; border-radius: 6px; overflow: hidden; background: #eef0f3; margin: 8px 0 10px; }
 .seg-bar { height: 100%; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin-right: 2px; flex: none; }
